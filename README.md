@@ -1,47 +1,41 @@
-# Email Sidebar / Source Sidebar
+# Source Sidebar for Flutter
 
-This public repository contains two related artifacts:
+This public repository owns `source_sidebar_flutter`, the native,
+provider-neutral source inbox and reading interface consumed by CommandGlows
+applications. It is a Flutter implementation, not a WebView wrapper.
 
-- the original v0 Next.js email-sidebar prototype, retained as interaction and
-  visual reference;
-- [`source_sidebar_flutter`](packages/source_sidebar_flutter), the production,
-  provider-neutral Flutter package consumed by CommandGlows applications.
+The deployed Vercel preview runs the real package with synthetic sources. Its
+actions are deliberately simulated: the preview contains no Readwise token,
+performs no network mutation, and cannot alter a real library.
 
-The Flutter package is a native rewrite, not a WebView wrapper around React. It
-contains no Readwise credentials or product-specific ingestion logic. Each host
-application supplies its own source adapter, authorization, theme mapping, and
-downstream actions.
+The original v0/React prototype remains available in Git history as the initial
+interaction reference; it is no longer an active application or deployment.
 
-Licensed under the MIT License.
+## Repository layout
 
-This is a [Next.js](https://nextjs.org) project bootstrapped with [v0](https://v0.app).
+- `packages/source_sidebar_flutter`: reusable Flutter presentation package.
+- `demo`: Flutter Web preview consuming the package by local path.
+- `scripts/vercel-build.sh`: reproducible Vercel build with Flutter 3.41.7.
 
-## Built with v0
-
-This repository is linked to a [v0](https://v0.app) project. You can continue developing by visiting the link below -- start new chats to make changes, and v0 will push commits directly to this repo. Every merge to `main` will automatically deploy.
-
-[Continue working on v0 →](https://v0.app/chat/projects/prj_5oAOeiBedIeqoOqOeT61pGpgqLMs)
-
-## Getting Started
-
-First, run the development server:
+## Run the preview locally
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
+cd demo
+flutter pub get
+flutter run -d chrome
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Validate
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+cd packages/source_sidebar_flutter
+flutter analyze
+flutter test
 
-## Learn More
+cd ../../demo
+flutter analyze
+flutter test
+flutter build web --release
+```
 
-To learn more, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-- [v0 Documentation](https://v0.app/docs) - learn about v0 and how to use it.
+Licensed under the MIT License.

@@ -9,6 +9,10 @@
 
 # production
 /build
+**/.dart_tool/
+**/.flutter-plugins-dependencies
+**/build/
+demo/pubspec.lock
 
 # debug
 npm-debug.log*

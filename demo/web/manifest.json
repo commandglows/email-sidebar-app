@@ -1,0 +1,10 @@
+{
+  "name": "Source Sidebar — Flutter preview",
+  "short_name": "Source Sidebar",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#FFFFFF",
+  "theme_color": "#4D5DFF",
+  "description": "Interactive Flutter preview of the shared Source Sidebar package.",
+  "orientation": "any"
+}
