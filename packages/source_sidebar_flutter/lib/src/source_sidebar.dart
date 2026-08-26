@@ -183,13 +183,14 @@ class _SourceSidebarState extends State<SourceSidebar> {
             .length,
       _FilterId.archive =>
         widget.items.where((item) => item.location == 'archive').length,
-      _FilterId.later => widget.laterDestinationId == null
-          ? 0
-          : widget.items
-                .where(
-                  (item) => item.location == widget.laterDestinationId,
-                )
-                .length,
+      _FilterId.later =>
+        widget.laterDestinationId == null
+            ? 0
+            : widget.items
+                  .where(
+                    (item) => item.location == widget.laterDestinationId,
+                  )
+                  .length,
       _ =>
         filterId.startsWith(_FilterId.tagPrefix)
             ? widget.items
@@ -493,7 +494,9 @@ class _SourceSidebarState extends State<SourceSidebar> {
     final canMoveToLater =
         widget.onMove != null &&
         laterId != null &&
-        widget.moveDestinations.any((destination) => destination.id == laterId);
+        widget.moveDestinations.any(
+          (destination) => destination.id == laterId,
+        );
     if (canMoveToLater) {
       add(widget.shortcuts.moveToLater, 'Move to Later');
     }

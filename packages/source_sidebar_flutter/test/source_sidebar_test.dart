@@ -337,57 +337,55 @@ void main() {
     );
   });
 
-  testWidgets(
-    'configured Later is recoverable and other locations stay in Inbox',
-    (tester) async {
-      tester.view.physicalSize = const Size(1280, 900);
-      tester.view.devicePixelRatio = 1;
-      addTearDown(tester.view.resetPhysicalSize);
-      addTearDown(tester.view.resetDevicePixelRatio);
-      final locatedItems = [
-        items.first,
-        _locatedItem('later-item', 'Saved for later', 'later'),
-        _locatedItem('reference-item', 'Saved as reference', 'reference'),
-      ];
+  testWidgets('Later is recoverable and other locations stay in Inbox', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1280, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final locatedItems = [
+      items.first,
+      _locatedItem('later-item', 'Saved for later', 'later'),
+      _locatedItem('reference-item', 'Saved as reference', 'reference'),
+    ];
 
-      await tester.pumpWidget(_KeyboardHarness(items: locatedItems));
-      await tester.pump();
+    await tester.pumpWidget(_KeyboardHarness(items: locatedItems));
+    await tester.pump();
 
-      expect(find.text('Later'), findsOneWidget);
-      expect(find.text('1'), findsOneWidget);
-      expect(find.text('Saved for later'), findsNothing);
-      expect(find.text('Saved as reference'), findsOneWidget);
+    expect(find.text('Later'), findsOneWidget);
+    expect(find.text('1'), findsOneWidget);
+    expect(find.text('Saved for later'), findsNothing);
+    expect(find.text('Saved as reference'), findsOneWidget);
 
-      await tester.tap(find.text('Later'));
-      await tester.pump();
-      expect(find.text('Saved for later'), findsOneWidget);
-      expect(find.text('Saved as reference'), findsNothing);
-    },
-  );
+    await tester.tap(find.text('Later'));
+    await tester.pump();
+    expect(find.text('Saved for later'), findsOneWidget);
+    expect(find.text('Saved as reference'), findsNothing);
+  });
 
-  testWidgets(
-    'mobile navigation exposes Later when configured',
-    (tester) async {
-      tester.view.physicalSize = const Size(390, 844);
-      tester.view.devicePixelRatio = 1;
-      addTearDown(tester.view.resetPhysicalSize);
-      addTearDown(tester.view.resetDevicePixelRatio);
-      final locatedItems = [
-        items.first,
-        _locatedItem('later-item', 'Saved for later', 'later'),
-      ];
+  testWidgets('mobile navigation exposes Later when configured', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final locatedItems = [
+      items.first,
+      _locatedItem('later-item', 'Saved for later', 'later'),
+    ];
 
-      await tester.pumpWidget(_KeyboardHarness(items: locatedItems));
-      await tester.pump();
-      await tester.tap(find.byTooltip('Source filters'));
-      await tester.pumpAndSettle();
+    await tester.pumpWidget(_KeyboardHarness(items: locatedItems));
+    await tester.pump();
+    await tester.tap(find.byTooltip('Source filters'));
+    await tester.pumpAndSettle();
 
-      expect(find.text('Later'), findsOneWidget);
-      await tester.tap(find.text('Later'));
-      await tester.pumpAndSettle();
-      expect(find.text('Saved for later'), findsOneWidget);
-    },
-  );
+    expect(find.text('Later'), findsOneWidget);
+    await tester.tap(find.text('Later'));
+    await tester.pumpAndSettle();
+    expect(find.text('Saved for later'), findsOneWidget);
+  });
 
   testWidgets('without Later configuration its location stays in Inbox', (
     tester,

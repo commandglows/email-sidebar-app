@@ -38,9 +38,7 @@ void main() {
     expect(find.byTooltip('Refresh sources'), findsWidgets);
   });
 
-  testWidgets('demonstrates the default Later keyboard action', (
-    tester,
-  ) async {
+  testWidgets('demonstrates Later keyboard action', (tester) async {
     tester.view.physicalSize = const Size(1280, 900);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);

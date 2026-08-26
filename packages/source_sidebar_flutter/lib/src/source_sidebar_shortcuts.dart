@@ -1,5 +1,5 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/widgets.dart';
 
 /// Keyboard bindings understood by `SourceSidebar`.
 ///
@@ -34,9 +34,7 @@ class SourceSidebarShortcuts {
     this.delete = const [SingleActivator(LogicalKeyboardKey.keyW)],
     this.move = const [SingleActivator(LogicalKeyboardKey.keyV)],
     this.moveToLater = const [SingleActivator(LogicalKeyboardKey.keyL)],
-    this.help = const [
-      SingleActivator(LogicalKeyboardKey.slash, shift: true),
-    ],
+    this.help = const [SingleActivator(LogicalKeyboardKey.slash, shift: true)],
   });
 
   final List<ShortcutActivator> next;
