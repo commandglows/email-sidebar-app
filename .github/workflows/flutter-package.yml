@@ -32,7 +32,12 @@ jobs:
           channel: stable
           cache: true
       - run: flutter pub get
-      - run: dart format --output=none --set-exit-if-changed lib test
+      - name: Check formatting
+        run: |
+          if ! dart format --output=none --set-exit-if-changed lib test; then
+            dart format lib test
+            git diff --exit-code -- lib test
+          fi
       - run: flutter analyze
       - run: flutter test
 
@@ -49,7 +54,12 @@ jobs:
           channel: stable
           cache: true
       - run: flutter pub get
-      - run: dart format --output=none --set-exit-if-changed lib test
+      - name: Check formatting
+        run: |
+          if ! dart format --output=none --set-exit-if-changed lib test; then
+            dart format lib test
+            git diff --exit-code -- lib test
+          fi
       - run: flutter analyze
       - run: flutter test
       - run: flutter build web --release
