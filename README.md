@@ -1,4 +1,18 @@
-# email-sidebar-app
+# Email Sidebar / Source Sidebar
+
+This public repository contains two related artifacts:
+
+- the original v0 Next.js email-sidebar prototype, retained as interaction and
+  visual reference;
+- [`source_sidebar_flutter`](packages/source_sidebar_flutter), the production,
+  provider-neutral Flutter package consumed by CommandGlows applications.
+
+The Flutter package is a native rewrite, not a WebView wrapper around React. It
+contains no Readwise credentials or product-specific ingestion logic. Each host
+application supplies its own source adapter, authorization, theme mapping, and
+downstream actions.
+
+Licensed under the MIT License.
 
 This is a [Next.js](https://nextjs.org) project bootstrapped with [v0](https://v0.app).
 

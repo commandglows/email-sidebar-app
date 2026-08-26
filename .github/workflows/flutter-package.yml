@@ -1,0 +1,31 @@
+name: Flutter package
+
+on:
+  push:
+    paths:
+      - "packages/source_sidebar_flutter/**"
+      - ".github/workflows/flutter-package.yml"
+  pull_request:
+    paths:
+      - "packages/source_sidebar_flutter/**"
+      - ".github/workflows/flutter-package.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: packages/source_sidebar_flutter
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - run: dart format --output=none --set-exit-if-changed lib test
+      - run: flutter analyze
+      - run: flutter test
