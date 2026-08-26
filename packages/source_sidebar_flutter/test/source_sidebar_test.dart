@@ -135,10 +135,7 @@ void main() {
   ) async {
     var deleted = false;
     await tester.pumpWidget(
-      _KeyboardHarness(
-        items: items,
-        onDelete: (_) async => deleted = true,
-      ),
+      _KeyboardHarness(items: items, onDelete: (_) async => deleted = true),
     );
     await tester.pump();
 

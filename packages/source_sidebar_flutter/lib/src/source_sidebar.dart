@@ -187,9 +187,7 @@ class _SourceSidebarState extends State<SourceSidebar> {
         widget.laterDestinationId == null
             ? 0
             : widget.items
-                  .where(
-                    (item) => item.location == widget.laterDestinationId,
-                  )
+                  .where((item) => item.location == widget.laterDestinationId)
                   .length,
       _ =>
         filterId.startsWith(_FilterId.tagPrefix)
@@ -264,8 +262,8 @@ class _SourceSidebarState extends State<SourceSidebar> {
 
   void _openActive() {
     if (_isEditingText) return;
-    final item = _actionItem ??
-        (_visibleItems.isEmpty ? null : _visibleItems.first);
+    final item =
+        _actionItem ?? (_visibleItems.isEmpty ? null : _visibleItems.first);
     if (item != null) widget.onSelected(item.id);
   }
 
@@ -313,10 +311,9 @@ class _SourceSidebarState extends State<SourceSidebar> {
       final estimatedOffset =
           index * (widget.style.denseRowHeight + widget.style.dividerThickness);
       _listScrollController.animateTo(
-        estimatedOffset.clamp(
-          0,
-          _listScrollController.position.maxScrollExtent,
-        ).toDouble(),
+        estimatedOffset
+            .clamp(0, _listScrollController.position.maxScrollExtent)
+            .toDouble(),
         duration: widget.style.keyboardScrollDuration,
         curve: Curves.easeOut,
       );
@@ -451,10 +448,7 @@ class _SourceSidebarState extends State<SourceSidebar> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
-            children: [
-              ..._helpRows,
-              const Text('Tab / Shift+Tab  Move focus'),
-            ],
+            children: [..._helpRows, const Text('Tab / Shift+Tab  Move focus')],
           ),
         ),
         actions: [
@@ -494,9 +488,7 @@ class _SourceSidebarState extends State<SourceSidebar> {
     final canMoveToLater =
         widget.onMove != null &&
         laterId != null &&
-        widget.moveDestinations.any(
-          (destination) => destination.id == laterId,
-        );
+        widget.moveDestinations.any((destination) => destination.id == laterId);
     if (canMoveToLater) {
       add(widget.shortcuts.moveToLater, 'Move to Later');
     }
@@ -752,9 +744,8 @@ class _SourceSidebarState extends State<SourceSidebar> {
                                         widget.onMove == null ||
                                             widget.moveDestinations.isEmpty
                                         ? null
-                                        : () => _showMoveChooser(
-                                            _selectedItem!,
-                                          ),
+                                        : () =>
+                                              _showMoveChooser(_selectedItem!),
                                   ),
                           ),
                         ],
