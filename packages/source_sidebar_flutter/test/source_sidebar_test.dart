@@ -350,8 +350,12 @@ void main() {
     await tester.pumpWidget(_KeyboardHarness(items: locatedItems));
     await tester.pump();
 
-    expect(find.text('Later'), findsOneWidget);
-    expect(find.text('1'), findsOneWidget);
+    final laterNavigation = find.widgetWithText(InkWell, 'Later');
+    expect(laterNavigation, findsOneWidget);
+    expect(
+      find.descendant(of: laterNavigation, matching: find.text('1')),
+      findsOneWidget,
+    );
     expect(find.text('Saved for later'), findsNothing);
     expect(find.text('Saved as reference'), findsOneWidget);
 
