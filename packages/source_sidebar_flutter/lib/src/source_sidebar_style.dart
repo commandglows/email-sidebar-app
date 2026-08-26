@@ -90,6 +90,8 @@ class SourceSidebarStyle {
     this.gap3XLarge = 28,
     this.gap4XLarge = 32,
     this.readerLineHeight = 1.55,
+    this.focusOverlayOpacity = 0.12,
+    this.keyboardScrollDuration = const Duration(milliseconds: 120),
   });
 
   final SourceSidebarColors? colors;
@@ -128,4 +130,6 @@ class SourceSidebarStyle {
   final double gap3XLarge;
   final double gap4XLarge;
   final double readerLineHeight;
+  final double focusOverlayOpacity;
+  final Duration keyboardScrollDuration;
 }

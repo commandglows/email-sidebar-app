@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:source_sidebar_preview/main.dart';
 
@@ -35,5 +36,22 @@ void main() {
     expect(find.text('Sources'), findsOneWidget);
     expect(find.byTooltip('Source filters'), findsOneWidget);
     expect(find.byTooltip('Refresh sources'), findsWidgets);
+  });
+
+  testWidgets('demonstrates the default Later keyboard action', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1280, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(const SourceSidebarPreviewApp());
+    await tester.pump();
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyJ);
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyL);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Moved to Later in this demo.'), findsOneWidget);
   });
 }

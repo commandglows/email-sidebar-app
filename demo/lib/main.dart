@@ -49,6 +49,12 @@ class SourceLibraryDemo extends StatefulWidget {
 }
 
 class _SourceLibraryDemoState extends State<SourceLibraryDemo> {
+  static const _moveDestinations = [
+    SourceMoveDestination(id: 'later', label: 'Later'),
+    SourceMoveDestination(id: 'reference', label: 'Reference'),
+    SourceMoveDestination(id: 'archive', label: 'Archived'),
+  ];
+
   late List<SourceSidebarItem> _items;
   String? _selectedId;
   bool _loading = false;
@@ -92,6 +98,15 @@ class _SourceLibraryDemoState extends State<SourceLibraryDemo> {
     _replace(item, location: 'archive');
     setState(() => _selectedId = null);
     _notify('Moved to Archived in this demo.');
+  }
+
+  Future<void> _move(
+    SourceSidebarItem item,
+    SourceMoveDestination destination,
+  ) async {
+    _replace(item, location: destination.id);
+    setState(() => _selectedId = null);
+    _notify('Moved to ${destination.label} in this demo.');
   }
 
   Future<void> _delete(SourceSidebarItem item) async {
@@ -180,6 +195,9 @@ class _SourceLibraryDemoState extends State<SourceLibraryDemo> {
           onArchive: _archive,
           onDelete: _delete,
           onOpenExternal: _openExternal,
+          moveDestinations: _moveDestinations,
+          laterDestinationId: 'later',
+          onMove: _move,
         ),
       ),
     );

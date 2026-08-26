@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:source_sidebar_flutter/source_sidebar_flutter.dart';
 
@@ -14,6 +15,15 @@ void main() {
       sourceType: 'email',
       content: 'Sanitized plain-text content.',
       tags: const ['project-ready'],
+    ),
+    SourceSidebarItem(
+      id: 'two',
+      title: 'Another useful source',
+      authorOrPublisher: 'Another publisher',
+      summary: 'Another summary',
+      publishedAt: DateTime.utc(2026, 8, 25),
+      sourceType: 'email',
+      content: 'Second sanitized plain-text content.',
     ),
   ];
 
@@ -90,4 +100,389 @@ void main() {
     await tester.pumpAndSettle();
     expect(deleted, isTrue);
   });
+
+  testWidgets('navigates, opens, and returns with Glows defaults', (
+    tester,
+  ) async {
+    await tester.pumpWidget(_KeyboardHarness(items: items));
+    await tester.pump();
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyJ);
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyK);
+    await tester.pump();
+    expect(find.byTooltip('Back to sources'), findsNothing);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pump();
+    expect(find.byTooltip('Back to sources'), findsOneWidget);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyU);
+    await tester.pump();
+    expect(find.byTooltip('Back to sources'), findsNothing);
+    expect(find.text('A useful source'), findsOneWidget);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyO);
+    await tester.pump();
+    expect(find.byTooltip('Back to sources'), findsOneWidget);
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pump();
+    expect(find.byTooltip('Back to sources'), findsNothing);
+  });
+
+  testWidgets('W keeps destructive confirmation in the keyboard path', (
+    tester,
+  ) async {
+    var deleted = false;
+    await tester.pumpWidget(
+      _KeyboardHarness(
+        items: items,
+        onDelete: (_) async => deleted = true,
+      ),
+    );
+    await tester.pump();
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyJ);
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyW);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Delete this source?'), findsOneWidget);
+    expect(deleted, isFalse);
+    await tester.tap(find.text('Delete'));
+    await tester.pumpAndSettle();
+    expect(deleted, isTrue);
+  });
+
+  testWidgets('hosts can replace or disable individual bindings', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _KeyboardHarness(
+        items: items,
+        onDelete: (_) async {},
+        shortcuts: const SourceSidebarShortcuts(
+          delete: [SingleActivator(LogicalKeyboardKey.keyD)],
+          archive: [],
+        ),
+      ),
+    );
+    await tester.pump();
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyJ);
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyW);
+    await tester.pump();
+    expect(find.text('Delete this source?'), findsNothing);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyD);
+    await tester.pumpAndSettle();
+    expect(find.text('Delete this source?'), findsOneWidget);
+  });
+
+  testWidgets('alphabetic shortcuts never intercept editable text', (
+    tester,
+  ) async {
+    var actions = 0;
+    await tester.pumpWidget(
+      _KeyboardHarness(
+        items: items,
+        onDelete: (_) async => actions++,
+        onArchive: (_) async => actions++,
+        onMove: (_, _) async => actions++,
+      ),
+    );
+    await tester.pump();
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyJ);
+    await tester.sendKeyEvent(LogicalKeyboardKey.slash);
+    await tester.pump();
+    final editable = tester.widget<EditableText>(find.byType(EditableText));
+    expect(editable.focusNode.hasFocus, isTrue);
+    await tester.enterText(find.byType(TextField), 'useful');
+    expect(find.text('useful'), findsOneWidget);
+
+    for (final key in [
+      LogicalKeyboardKey.keyW,
+      LogicalKeyboardKey.keyE,
+      LogicalKeyboardKey.keyL,
+      LogicalKeyboardKey.keyV,
+      LogicalKeyboardKey.keyJ,
+      LogicalKeyboardKey.keyK,
+      LogicalKeyboardKey.keyO,
+      LogicalKeyboardKey.keyU,
+    ]) {
+      await tester.sendKeyEvent(key);
+    }
+    await tester.pump();
+
+    expect(actions, 0);
+    expect(find.text('Delete this source?'), findsNothing);
+    expect(find.text('Move source'), findsNothing);
+    expect(editable.focusNode.hasFocus, isTrue);
+  });
+
+  testWidgets('Ctrl+F focuses the global source search', (tester) async {
+    await tester.pumpWidget(_KeyboardHarness(items: items));
+    await tester.pump();
+
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyF);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+    await tester.pump();
+
+    final editable = tester.widget<EditableText>(find.byType(EditableText));
+    expect(editable.focusNode.hasFocus, isTrue);
+  });
+
+  testWidgets('L moves to Later and V opens the destination chooser', (
+    tester,
+  ) async {
+    SourceMoveDestination? movedTo;
+    await tester.pumpWidget(
+      _KeyboardHarness(
+        items: items,
+        onMove: (_, destination) async => movedTo = destination,
+      ),
+    );
+    await tester.pump();
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyJ);
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyL);
+    await tester.pump();
+    expect(movedTo?.id, 'later');
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyV);
+    await tester.pumpAndSettle();
+    expect(find.text('Move source'), findsOneWidget);
+    await tester.tap(find.text('Reference'));
+    await tester.pumpAndSettle();
+    expect(movedTo?.id, 'reference');
+  });
+
+  testWidgets('E invokes the configured archive callback', (tester) async {
+    String? archivedId;
+    await tester.pumpWidget(
+      _KeyboardHarness(
+        items: items,
+        onArchive: (item) async => archivedId = item.id,
+      ),
+    );
+    await tester.pump();
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyJ);
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyE);
+    await tester.pump();
+    expect(archivedId, 'one');
+  });
+
+  testWidgets('? exposes keyboard help and restores focus after closing', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _KeyboardHarness(
+        items: items,
+        onArchive: (_) async {},
+        onDelete: (_) async {},
+        onMove: (_, _) async {},
+      ),
+    );
+    await tester.pump();
+
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.slash);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+    await tester.pumpAndSettle();
+    expect(find.text('Keyboard shortcuts'), findsOneWidget);
+    expect(find.textContaining('Delete with confirmation'), findsOneWidget);
+
+    await tester.tap(find.text('Close'));
+    await tester.pumpAndSettle();
+    expect(find.text('Keyboard shortcuts'), findsNothing);
+    expect(FocusManager.instance.primaryFocus, isNotNull);
+  });
+
+  testWidgets('help omits shortcuts whose host actions are unavailable', (
+    tester,
+  ) async {
+    await tester.pumpWidget(_KeyboardHarness(items: items));
+    await tester.pump();
+
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.slash);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+    await tester.pumpAndSettle();
+
+    final help = find.byType(AlertDialog);
+    expect(
+      find.descendant(of: help, matching: find.textContaining('Archive')),
+      findsNothing,
+    );
+    expect(
+      find.descendant(
+        of: help,
+        matching: find.textContaining('Delete with confirmation'),
+      ),
+      findsNothing,
+    );
+    expect(
+      find.descendant(of: help, matching: find.textContaining('Move…')),
+      findsNothing,
+    );
+    expect(
+      find.descendant(of: help, matching: find.textContaining('Move to Later')),
+      findsNothing,
+    );
+    expect(
+      find.descendant(of: help, matching: find.textContaining('Open source')),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets(
+    'configured Later is recoverable and other locations stay in Inbox',
+    (tester) async {
+      tester.view.physicalSize = const Size(1280, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final locatedItems = [
+        items.first,
+        _locatedItem('later-item', 'Saved for later', 'later'),
+        _locatedItem('reference-item', 'Saved as reference', 'reference'),
+      ];
+
+      await tester.pumpWidget(_KeyboardHarness(items: locatedItems));
+      await tester.pump();
+
+      expect(find.text('Later'), findsOneWidget);
+      expect(find.text('1'), findsOneWidget);
+      expect(find.text('Saved for later'), findsNothing);
+      expect(find.text('Saved as reference'), findsOneWidget);
+
+      await tester.tap(find.text('Later'));
+      await tester.pump();
+      expect(find.text('Saved for later'), findsOneWidget);
+      expect(find.text('Saved as reference'), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'mobile navigation exposes Later when configured',
+    (tester) async {
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final locatedItems = [
+        items.first,
+        _locatedItem('later-item', 'Saved for later', 'later'),
+      ];
+
+      await tester.pumpWidget(_KeyboardHarness(items: locatedItems));
+      await tester.pump();
+      await tester.tap(find.byTooltip('Source filters'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Later'), findsOneWidget);
+      await tester.tap(find.text('Later'));
+      await tester.pumpAndSettle();
+      expect(find.text('Saved for later'), findsOneWidget);
+    },
+  );
+
+  testWidgets('without Later configuration its location stays in Inbox', (
+    tester,
+  ) async {
+    final locatedItems = [
+      items.first,
+      _locatedItem('later-item', 'Legacy later location', 'later'),
+    ];
+    await tester.pumpWidget(
+      _KeyboardHarness(items: locatedItems, laterDestinationId: null),
+    );
+    await tester.pump();
+
+    expect(find.text('Legacy later location'), findsOneWidget);
+    await tester.tap(find.byTooltip('Source filters'));
+    await tester.pumpAndSettle();
+    expect(find.text('Later'), findsNothing);
+  });
+
+  testWidgets('Tab and Shift+Tab use native focus traversal', (tester) async {
+    await tester.pumpWidget(_KeyboardHarness(items: items));
+    await tester.pump();
+    final initialFocus = FocusManager.instance.primaryFocus;
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    await tester.pump();
+    final forwardFocus = FocusManager.instance.primaryFocus;
+    expect(forwardFocus, isNotNull);
+    expect(forwardFocus, isNot(same(initialFocus)));
+
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+    await tester.pump();
+    expect(FocusManager.instance.primaryFocus, isNotNull);
+  });
+}
+
+class _KeyboardHarness extends StatefulWidget {
+  const _KeyboardHarness({
+    required this.items,
+    this.shortcuts = const SourceSidebarShortcuts(),
+    this.onDelete,
+    this.onArchive,
+    this.onMove,
+    this.laterDestinationId = 'later',
+  });
+
+  final List<SourceSidebarItem> items;
+  final SourceSidebarShortcuts shortcuts;
+  final SourceItemCallback? onDelete;
+  final SourceItemCallback? onArchive;
+  final SourceMoveCallback? onMove;
+  final String? laterDestinationId;
+
+  @override
+  State<_KeyboardHarness> createState() => _KeyboardHarnessState();
+}
+
+class _KeyboardHarnessState extends State<_KeyboardHarness> {
+  String? selectedId;
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      home: SizedBox(
+        width: 1200,
+        child: SourceSidebar(
+          items: widget.items,
+          selectedId: selectedId,
+          shortcuts: widget.shortcuts,
+          onSelected: (id) => setState(() => selectedId = id),
+          onDelete: widget.onDelete,
+          onArchive: widget.onArchive,
+          onMove: widget.onMove,
+          moveDestinations: const [
+            SourceMoveDestination(id: 'later', label: 'Later'),
+            SourceMoveDestination(id: 'reference', label: 'Reference'),
+          ],
+          laterDestinationId: widget.laterDestinationId,
+        ),
+      ),
+    );
+  }
+}
+
+SourceSidebarItem _locatedItem(String id, String title, String location) {
+  return SourceSidebarItem(
+    id: id,
+    title: title,
+    authorOrPublisher: 'Publisher',
+    summary: 'Summary',
+    publishedAt: DateTime.utc(2026, 8, 24),
+    sourceType: 'email',
+    content: 'Sanitized plain-text content.',
+    location: location,
+  );
 }

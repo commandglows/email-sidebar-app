@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.3.0
+
+- Added complete, host-customizable keyboard navigation with Glows defaults:
+  `W` delete, `E` archive, `L` Later, `V` move, `J/K` navigation, explicit
+  open/back/search commands, and `?` help.
+- Added provider-neutral move destinations and protected all alphabetic
+  shortcuts while an editable text control owns focus.
+- Added visible row focus, predictable focus restoration, and automatic scroll
+  tracking for the active source.
+- Added an optional Later navigation state that removes configured Later items
+  from Inbox while preserving the legacy Inbox behavior when Later is absent.
+
 ## 0.2.0
 
 - Rebuilt the interface as a faithful, full-height source workspace with a

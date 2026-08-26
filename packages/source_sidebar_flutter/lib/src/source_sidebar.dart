@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import 'source_move_destination.dart';
 import 'source_sidebar_item.dart';
+import 'source_sidebar_shortcuts.dart';
 import 'source_sidebar_style.dart';
 
 class SourceSidebar extends StatefulWidget {
@@ -25,6 +27,10 @@ class SourceSidebar extends StatefulWidget {
     this.onArchive,
     this.onDelete,
     this.onOpenExternal,
+    this.onMove,
+    this.moveDestinations = const <SourceMoveDestination>[],
+    this.laterDestinationId,
+    this.shortcuts = const SourceSidebarShortcuts(),
     this.topBarActions = const <Widget>[],
   });
 
@@ -46,6 +52,10 @@ class SourceSidebar extends StatefulWidget {
   final SourceItemCallback? onArchive;
   final SourceItemCallback? onDelete;
   final SourceItemCallback? onOpenExternal;
+  final SourceMoveCallback? onMove;
+  final List<SourceMoveDestination> moveDestinations;
+  final String? laterDestinationId;
+  final SourceSidebarShortcuts shortcuts;
   final List<Widget> topBarActions;
 
   @override
@@ -55,15 +65,37 @@ class SourceSidebar extends StatefulWidget {
 class _SourceSidebarState extends State<SourceSidebar> {
   final _searchController = TextEditingController();
   final _searchFocus = FocusNode();
+  final _workspaceFocus = FocusNode(debugLabel: 'Source sidebar workspace');
+  final _listScrollController = ScrollController();
+  final _rowKeys = <String, GlobalKey>{};
   String _query = '';
   String _filterId = _FilterId.inbox;
   String? _pendingAction;
+  String? _activeId;
 
   @override
   void dispose() {
     _searchController.dispose();
     _searchFocus.dispose();
+    _workspaceFocus.dispose();
+    _listScrollController.dispose();
     super.dispose();
+  }
+
+  @override
+  void didUpdateWidget(covariant SourceSidebar oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.laterDestinationId == null && _filterId == _FilterId.later) {
+      _filterId = _FilterId.inbox;
+    }
+    if (widget.selectedId == null && oldWidget.selectedId != null) {
+      _activeId = oldWidget.selectedId;
+      _restoreWorkspaceFocus();
+    }
+    if (_activeId != null &&
+        !widget.items.any((item) => item.id == _activeId)) {
+      _activeId = null;
+    }
   }
 
   SourceSidebarColors get _colors =>
@@ -82,11 +114,17 @@ class _SourceSidebarState extends State<SourceSidebar> {
               item.tags.any((tag) => tag.toLowerCase().contains(query));
           if (!matchesQuery) return false;
           return switch (_filterId) {
-            _FilterId.inbox => item.location != 'archive',
+            _FilterId.inbox =>
+              item.location != 'archive' &&
+                  (widget.laterDestinationId == null ||
+                      item.location != widget.laterDestinationId),
             _FilterId.unread => !item.seen && item.location != 'archive',
             _FilterId.processed =>
               item.processingState == SourceProcessingState.processed,
             _FilterId.archive => item.location == 'archive',
+            _FilterId.later =>
+              widget.laterDestinationId != null &&
+                  item.location == widget.laterDestinationId,
             _ =>
               _filterId.startsWith(_FilterId.tagPrefix)
                   ? item.tags.contains(
@@ -125,7 +163,14 @@ class _SourceSidebarState extends State<SourceSidebar> {
   int _countFor(String filterId) {
     return switch (filterId) {
       _FilterId.inbox =>
-        widget.items.where((item) => item.location != 'archive').length,
+        widget.items
+            .where(
+              (item) =>
+                  item.location != 'archive' &&
+                  (widget.laterDestinationId == null ||
+                      item.location != widget.laterDestinationId),
+            )
+            .length,
       _FilterId.unread =>
         widget.items
             .where((item) => !item.seen && item.location != 'archive')
@@ -138,6 +183,13 @@ class _SourceSidebarState extends State<SourceSidebar> {
             .length,
       _FilterId.archive =>
         widget.items.where((item) => item.location == 'archive').length,
+      _FilterId.later => widget.laterDestinationId == null
+          ? 0
+          : widget.items
+                .where(
+                  (item) => item.location == widget.laterDestinationId,
+                )
+                .length,
       _ =>
         filterId.startsWith(_FilterId.tagPrefix)
             ? widget.items
@@ -157,6 +209,7 @@ class _SourceSidebarState extends State<SourceSidebar> {
       _FilterId.unread => 'Unread',
       _FilterId.processed => 'Processed',
       _FilterId.archive => 'Archived',
+      _FilterId.later => 'Later',
       _ =>
         _filterId.startsWith(_FilterId.tagPrefix)
             ? _filterId.substring(_FilterId.tagPrefix.length)
@@ -165,22 +218,109 @@ class _SourceSidebarState extends State<SourceSidebar> {
   }
 
   void _selectFilter(String id) {
-    setState(() => _filterId = id);
+    setState(() {
+      _filterId = id;
+      _activeId = null;
+    });
     widget.onSelected(null);
   }
 
   void _moveSelection(int delta) {
-    if (_searchFocus.hasFocus) return;
+    if (_isEditingText) return;
     final items = _visibleItems;
     if (items.isEmpty) return;
-    final current = items.indexWhere((item) => item.id == widget.selectedId);
+    final readerOpen = _selectedItem != null;
+    final currentId = readerOpen ? widget.selectedId : _activeId;
+    final current = items.indexWhere((item) => item.id == currentId);
     final next = current < 0
         ? 0
         : (current + delta).clamp(0, items.length - 1).toInt();
-    widget.onSelected(items[next].id);
+    if (readerOpen) {
+      widget.onSelected(items[next].id);
+    } else {
+      setState(() => _activeId = items[next].id);
+      _ensureActiveVisible();
+    }
   }
 
-  void _closeReader() => widget.onSelected(null);
+  bool get _isEditingText {
+    final focusContext = FocusManager.instance.primaryFocus?.context;
+    if (focusContext == null) return false;
+    return focusContext.widget is EditableText ||
+        focusContext.findAncestorWidgetOfExactType<EditableText>() != null;
+  }
+
+  SourceSidebarItem? get _actionItem {
+    final selected = _selectedItem;
+    if (selected != null) return selected;
+    final activeId = _activeId;
+    if (activeId == null) return null;
+    for (final item in _visibleItems) {
+      if (item.id == activeId) return item;
+    }
+    return null;
+  }
+
+  void _openActive() {
+    if (_isEditingText) return;
+    final item = _actionItem ??
+        (_visibleItems.isEmpty ? null : _visibleItems.first);
+    if (item != null) widget.onSelected(item.id);
+  }
+
+  void _closeReader() {
+    if (_selectedItem == null) return;
+    _activeId = widget.selectedId;
+    widget.onSelected(null);
+    _restoreWorkspaceFocus();
+  }
+
+  void _restoreWorkspaceFocus() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (_selectedItem == null) {
+        final visibleItems = _visibleItems;
+        final activeIsVisible = visibleItems.any(
+          (item) => item.id == _activeId,
+        );
+        if (!activeIsVisible) {
+          setState(() {
+            _activeId = visibleItems.isEmpty ? null : visibleItems.first.id;
+          });
+        }
+      }
+      _workspaceFocus.requestFocus();
+      _ensureActiveVisible();
+    });
+  }
+
+  void _ensureActiveVisible() {
+    final rowContext = _rowKeys[_activeId]?.currentContext;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (rowContext != null && rowContext.mounted) {
+        Scrollable.ensureVisible(
+          rowContext,
+          alignment: 0.5,
+          duration: widget.style.keyboardScrollDuration,
+        );
+        return;
+      }
+      if (!_listScrollController.hasClients) return;
+      final index = _visibleItems.indexWhere((item) => item.id == _activeId);
+      if (index < 0) return;
+      final estimatedOffset =
+          index * (widget.style.denseRowHeight + widget.style.dividerThickness);
+      _listScrollController.animateTo(
+        estimatedOffset.clamp(
+          0,
+          _listScrollController.position.maxScrollExtent,
+        ).toDouble(),
+        duration: widget.style.keyboardScrollDuration,
+        curve: Curves.easeOut,
+      );
+    });
+  }
 
   Future<void> _runAction(
     String name,
@@ -192,7 +332,10 @@ class _SourceSidebarState extends State<SourceSidebar> {
     try {
       await callback(item);
     } finally {
-      if (mounted) setState(() => _pendingAction = null);
+      if (mounted) {
+        setState(() => _pendingAction = null);
+        _restoreWorkspaceFocus();
+      }
     }
   }
 
@@ -218,7 +361,204 @@ class _SourceSidebarState extends State<SourceSidebar> {
         ],
       ),
     );
-    if (confirmed == true) await _runAction('delete', item, callback);
+    if (confirmed == true) {
+      await _runAction('delete', item, callback);
+    } else {
+      _restoreWorkspaceFocus();
+    }
+  }
+
+  Future<void> _showMoveChooser(SourceSidebarItem item) async {
+    final callback = widget.onMove;
+    if (callback == null || widget.moveDestinations.isEmpty) return;
+    final destination = await showDialog<SourceMoveDestination>(
+      context: context,
+      builder: (context) => SimpleDialog(
+        title: const Text('Move source'),
+        children: widget.moveDestinations
+            .map(
+              (destination) => SimpleDialogOption(
+                onPressed: () => Navigator.pop(context, destination),
+                child: Text(destination.label),
+              ),
+            )
+            .toList(growable: false),
+      ),
+    );
+    if (destination != null) {
+      await _runMove(item, destination, callback);
+    } else {
+      _restoreWorkspaceFocus();
+    }
+  }
+
+  Future<void> _runMove(
+    SourceSidebarItem item,
+    SourceMoveDestination destination,
+    SourceMoveCallback callback,
+  ) async {
+    if (_pendingAction != null) return;
+    setState(() => _pendingAction = 'move:${destination.id}');
+    try {
+      await callback(item, destination);
+    } finally {
+      if (mounted) {
+        setState(() => _pendingAction = null);
+        _restoreWorkspaceFocus();
+      }
+    }
+  }
+
+  void _moveToLater() {
+    if (_isEditingText || widget.onMove == null) return;
+    final item = _actionItem;
+    final laterId = widget.laterDestinationId;
+    if (item == null || laterId == null) return;
+    for (final destination in widget.moveDestinations) {
+      if (destination.id == laterId) {
+        _runMove(item, destination, widget.onMove!);
+        return;
+      }
+    }
+  }
+
+  void _archiveActive() {
+    if (_isEditingText || widget.onArchive == null) return;
+    final item = _actionItem;
+    if (item != null) _runAction('archive', item, widget.onArchive!);
+  }
+
+  void _deleteActive() {
+    if (_isEditingText) return;
+    final item = _actionItem;
+    if (item != null) _confirmDelete(item);
+  }
+
+  void _showMoveForActive() {
+    if (_isEditingText) return;
+    final item = _actionItem;
+    if (item != null) _showMoveChooser(item);
+  }
+
+  Future<void> _showKeyboardHelp() async {
+    if (_isEditingText) return;
+    await showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Keyboard shortcuts'),
+        content: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ..._helpRows,
+              const Text('Tab / Shift+Tab  Move focus'),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            autofocus: true,
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+    _restoreWorkspaceFocus();
+  }
+
+  List<Widget> get _helpRows {
+    final rows = <Widget>[];
+    void add(List<ShortcutActivator> bindings, String label) {
+      if (bindings.isEmpty) return;
+      rows.add(Text('${_formatBindings(bindings)}  $label'));
+    }
+
+    add(widget.shortcuts.next, 'Next source');
+    add(widget.shortcuts.previous, 'Previous source');
+    add(widget.shortcuts.open, 'Open source');
+    add(widget.shortcuts.focusSearch, 'Search');
+    add(widget.shortcuts.back, 'Back to list');
+    if (widget.onArchive != null) {
+      add(widget.shortcuts.archive, 'Archive');
+    }
+    if (widget.onDelete != null) {
+      add(widget.shortcuts.delete, 'Delete with confirmation');
+    }
+    if (widget.onMove != null && widget.moveDestinations.isNotEmpty) {
+      add(widget.shortcuts.move, 'Move…');
+    }
+    final laterId = widget.laterDestinationId;
+    final canMoveToLater =
+        widget.onMove != null &&
+        laterId != null &&
+        widget.moveDestinations.any((destination) => destination.id == laterId);
+    if (canMoveToLater) {
+      add(widget.shortcuts.moveToLater, 'Move to Later');
+    }
+    add(widget.shortcuts.help, 'Show this help');
+    return rows;
+  }
+
+  String _formatBindings(List<ShortcutActivator> bindings) {
+    return bindings.map(_formatBinding).join(' / ');
+  }
+
+  String _formatBinding(ShortcutActivator binding) {
+    if (binding is! SingleActivator) return binding.toString();
+    final parts = <String>[
+      if (binding.control) 'Ctrl',
+      if (binding.meta) '⌘',
+      if (binding.alt) 'Alt',
+      if (binding.shift) 'Shift',
+    ];
+    final trigger = binding.trigger;
+    final key = switch (trigger) {
+      LogicalKeyboardKey.arrowDown => '↓',
+      LogicalKeyboardKey.arrowUp => '↑',
+      LogicalKeyboardKey.enter => 'Enter',
+      LogicalKeyboardKey.escape => 'Escape',
+      LogicalKeyboardKey.slash when binding.shift => '?',
+      _ => trigger.keyLabel.toUpperCase(),
+    };
+    if (key == '?' && parts.isNotEmpty && parts.last == 'Shift') {
+      parts.removeLast();
+    }
+    parts.add(key);
+    return parts.join('+');
+  }
+
+  Map<ShortcutActivator, Intent> get _shortcutMap {
+    final shortcuts = <ShortcutActivator, Intent>{};
+    void bind(List<ShortcutActivator> activators, Intent intent) {
+      for (final activator in activators) {
+        shortcuts[activator] = intent;
+      }
+    }
+
+    bind(widget.shortcuts.next, const _NextSourceIntent());
+    bind(widget.shortcuts.previous, const _PreviousSourceIntent());
+    for (final activator in widget.shortcuts.open) {
+      final isNativeEnter =
+          activator is SingleActivator &&
+          activator.trigger == LogicalKeyboardKey.enter &&
+          !activator.control &&
+          !activator.meta &&
+          !activator.alt &&
+          !activator.shift;
+      shortcuts[activator] = isNativeEnter
+          ? const _OpenSourceFromWorkspaceIntent()
+          : const _OpenSourceIntent();
+    }
+    bind(widget.shortcuts.focusSearch, const _FocusSearchIntent());
+    bind(widget.shortcuts.back, const _CloseReaderIntent());
+    bind(widget.shortcuts.archive, const _ArchiveSourceIntent());
+    bind(widget.shortcuts.delete, const _DeleteSourceIntent());
+    bind(widget.shortcuts.move, const _MoveSourceIntent());
+    bind(widget.shortcuts.moveToLater, const _MoveToLaterIntent());
+    bind(widget.shortcuts.help, const _KeyboardHelpIntent());
+    return shortcuts;
   }
 
   Future<void> _showNavigationSheet() async {
@@ -232,6 +572,7 @@ class _SourceSidebarState extends State<SourceSidebar> {
           style: widget.style,
           colors: _colors,
           selectedFilterId: _filterId,
+          showLater: widget.laterDestinationId != null,
           tags: _tags,
           countFor: _countFor,
           onOpenLibrary: widget.onOpenLibrary,
@@ -242,38 +583,62 @@ class _SourceSidebarState extends State<SourceSidebar> {
         ),
       ),
     );
+    _restoreWorkspaceFocus();
   }
 
   @override
   Widget build(BuildContext context) {
     return Shortcuts(
-      shortcuts: const {
-        SingleActivator(LogicalKeyboardKey.keyJ): _NextSourceIntent(),
-        SingleActivator(LogicalKeyboardKey.arrowDown): _NextSourceIntent(),
-        SingleActivator(LogicalKeyboardKey.keyK): _PreviousSourceIntent(),
-        SingleActivator(LogicalKeyboardKey.arrowUp): _PreviousSourceIntent(),
-        SingleActivator(LogicalKeyboardKey.keyF, control: true):
-            _FocusSearchIntent(),
-        SingleActivator(LogicalKeyboardKey.keyF, meta: true):
-            _FocusSearchIntent(),
-        SingleActivator(LogicalKeyboardKey.escape): _CloseReaderIntent(),
-      },
+      shortcuts: _shortcutMap,
       child: Actions(
         actions: {
-          _NextSourceIntent: CallbackAction<_NextSourceIntent>(
+          _NextSourceIntent: _GuardedAction<_NextSourceIntent>(
+            canInvoke: () => !_isEditingText,
             onInvoke: (_) => _moveSelection(1),
           ),
-          _PreviousSourceIntent: CallbackAction<_PreviousSourceIntent>(
+          _PreviousSourceIntent: _GuardedAction<_PreviousSourceIntent>(
+            canInvoke: () => !_isEditingText,
             onInvoke: (_) => _moveSelection(-1),
           ),
-          _FocusSearchIntent: CallbackAction<_FocusSearchIntent>(
+          _FocusSearchIntent: _GuardedAction<_FocusSearchIntent>(
+            canInvoke: () => !_isEditingText,
             onInvoke: (_) => _searchFocus.requestFocus(),
           ),
-          _CloseReaderIntent: CallbackAction<_CloseReaderIntent>(
+          _CloseReaderIntent: _GuardedAction<_CloseReaderIntent>(
+            canInvoke: () => !_isEditingText,
             onInvoke: (_) => _closeReader(),
+          ),
+          _OpenSourceIntent: _GuardedAction<_OpenSourceIntent>(
+            canInvoke: () => !_isEditingText,
+            onInvoke: (_) => _openActive(),
+          ),
+          _OpenSourceFromWorkspaceIntent: _WorkspaceOpenAction(
+            isWorkspaceFocused: () => _workspaceFocus.hasPrimaryFocus,
+            onOpen: _openActive,
+          ),
+          _ArchiveSourceIntent: _GuardedAction<_ArchiveSourceIntent>(
+            canInvoke: () => !_isEditingText,
+            onInvoke: (_) => _archiveActive(),
+          ),
+          _DeleteSourceIntent: _GuardedAction<_DeleteSourceIntent>(
+            canInvoke: () => !_isEditingText,
+            onInvoke: (_) => _deleteActive(),
+          ),
+          _MoveSourceIntent: _GuardedAction<_MoveSourceIntent>(
+            canInvoke: () => !_isEditingText,
+            onInvoke: (_) => _showMoveForActive(),
+          ),
+          _MoveToLaterIntent: _GuardedAction<_MoveToLaterIntent>(
+            canInvoke: () => !_isEditingText,
+            onInvoke: (_) => _moveToLater(),
+          ),
+          _KeyboardHelpIntent: _GuardedAction<_KeyboardHelpIntent>(
+            canInvoke: () => !_isEditingText,
+            onInvoke: (_) => _showKeyboardHelp(),
           ),
         },
         child: Focus(
+          focusNode: _workspaceFocus,
           autofocus: true,
           child: LayoutBuilder(
             builder: (context, constraints) {
@@ -310,6 +675,7 @@ class _SourceSidebarState extends State<SourceSidebar> {
                                 style: widget.style,
                                 colors: _colors,
                                 selectedFilterId: _filterId,
+                                showLater: widget.laterDestinationId != null,
                                 tags: _tags,
                                 countFor: _countFor,
                                 onOpenLibrary: widget.onOpenLibrary,
@@ -320,7 +686,7 @@ class _SourceSidebarState extends State<SourceSidebar> {
                             child: _selectedItem == null
                                 ? _SourceInbox(
                                     items: _visibleItems,
-                                    selectedId: widget.selectedId,
+                                    selectedId: _activeId,
                                     filterLabel: _filterLabel,
                                     isLoading: widget.isLoading,
                                     isLoadingMore: widget.isLoadingMore,
@@ -331,6 +697,10 @@ class _SourceSidebarState extends State<SourceSidebar> {
                                     style: widget.style,
                                     colors: _colors,
                                     onSelected: widget.onSelected,
+                                    rowKeys: _rowKeys,
+                                    scrollController: _listScrollController,
+                                    onActiveChanged: (id) =>
+                                        setState(() => _activeId = id),
                                     onRefresh: widget.onRefresh,
                                     onLoadMore: widget.onLoadMore,
                                   )
@@ -375,6 +745,13 @@ class _SourceSidebarState extends State<SourceSidebar> {
                                     onDelete: widget.onDelete == null
                                         ? null
                                         : () => _confirmDelete(_selectedItem!),
+                                    onMove:
+                                        widget.onMove == null ||
+                                            widget.moveDestinations.isEmpty
+                                        ? null
+                                        : () => _showMoveChooser(
+                                            _selectedItem!,
+                                          ),
                                   ),
                           ),
                         ],
@@ -574,6 +951,7 @@ class _NavigationPane extends StatelessWidget {
     required this.style,
     required this.colors,
     required this.selectedFilterId,
+    required this.showLater,
     required this.tags,
     required this.countFor,
     required this.onOpenLibrary,
@@ -584,6 +962,7 @@ class _NavigationPane extends StatelessWidget {
   final SourceSidebarStyle style;
   final SourceSidebarColors colors;
   final String selectedFilterId;
+  final bool showLater;
   final List<String> tags;
   final int Function(String) countFor;
   final Future<void> Function()? onOpenLibrary;
@@ -647,6 +1026,16 @@ class _NavigationPane extends StatelessWidget {
             colors: colors,
             onTap: () => onFilterSelected(_FilterId.processed),
           ),
+          if (showLater)
+            _NavigationItem(
+              label: 'Later',
+              icon: Icons.schedule_outlined,
+              count: countFor(_FilterId.later),
+              selected: selectedFilterId == _FilterId.later,
+              style: style,
+              colors: colors,
+              onTap: () => onFilterSelected(_FilterId.later),
+            ),
           _NavigationItem(
             label: 'Archived',
             icon: Icons.archive_outlined,
@@ -718,6 +1107,7 @@ class _NavigationItem extends StatelessWidget {
           right: Radius.circular(style.navigationItemRadius),
         ),
         child: InkWell(
+          focusColor: colors.focus.withValues(alpha: style.focusOverlayOpacity),
           borderRadius: BorderRadius.horizontal(
             right: Radius.circular(style.navigationItemRadius),
           ),
@@ -763,6 +1153,9 @@ class _SourceInbox extends StatelessWidget {
     required this.style,
     required this.colors,
     required this.onSelected,
+    required this.rowKeys,
+    required this.scrollController,
+    required this.onActiveChanged,
     required this.onRefresh,
     required this.onLoadMore,
   });
@@ -779,6 +1172,9 @@ class _SourceInbox extends StatelessWidget {
   final SourceSidebarStyle style;
   final SourceSidebarColors colors;
   final ValueChanged<String?> onSelected;
+  final Map<String, GlobalKey> rowKeys;
+  final ScrollController scrollController;
+  final ValueChanged<String> onActiveChanged;
   final Future<void> Function()? onRefresh;
   final Future<void> Function()? onLoadMore;
 
@@ -852,6 +1248,7 @@ class _SourceInbox extends StatelessWidget {
       );
     }
     return ListView.separated(
+      controller: scrollController,
       itemCount: items.length + (hasMore ? 1 : 0),
       separatorBuilder: (_, _) =>
           Divider(height: style.dividerThickness, color: colors.divider),
@@ -872,12 +1269,14 @@ class _SourceInbox extends StatelessWidget {
         }
         final item = items[index];
         return _DenseSourceRow(
+          key: rowKeys.putIfAbsent(item.id, () => GlobalKey()),
           item: item,
           compact: compact,
           selected: item.id == selectedId,
           style: style,
           colors: colors,
           onTap: () => onSelected(item.id),
+          onFocus: () => onActiveChanged(item.id),
         );
       },
     );
@@ -886,12 +1285,14 @@ class _SourceInbox extends StatelessWidget {
 
 class _DenseSourceRow extends StatelessWidget {
   const _DenseSourceRow({
+    super.key,
     required this.item,
     required this.compact,
     required this.selected,
     required this.style,
     required this.colors,
     required this.onTap,
+    required this.onFocus,
   });
 
   final SourceSidebarItem item;
@@ -900,6 +1301,7 @@ class _DenseSourceRow extends StatelessWidget {
   final SourceSidebarStyle style;
   final SourceSidebarColors colors;
   final VoidCallback onTap;
+  final VoidCallback onFocus;
 
   @override
   Widget build(BuildContext context) {
@@ -917,6 +1319,10 @@ class _DenseSourceRow extends StatelessWidget {
       child: Material(
         color: background,
         child: InkWell(
+          focusColor: colors.focus.withValues(alpha: style.focusOverlayOpacity),
+          onFocusChange: (focused) {
+            if (focused) onFocus();
+          },
           onTap: onTap,
           child: ConstrainedBox(
             constraints: BoxConstraints(minHeight: style.denseRowHeight),
@@ -1139,6 +1545,7 @@ class _ReaderPane extends StatelessWidget {
     this.onArchive,
     this.onDelete,
     this.onOpenExternal,
+    this.onMove,
   });
 
   final SourceSidebarItem item;
@@ -1154,6 +1561,7 @@ class _ReaderPane extends StatelessWidget {
   final VoidCallback? onArchive;
   final VoidCallback? onDelete;
   final VoidCallback? onOpenExternal;
+  final VoidCallback? onMove;
 
   @override
   Widget build(BuildContext context) {
@@ -1192,6 +1600,12 @@ class _ReaderPane extends StatelessWidget {
                       color: colors.danger,
                       onPressed: busy ? null : onDelete,
                     ),
+                    if (onMove != null)
+                      _ActionIcon(
+                        tooltip: 'Move source',
+                        icon: Icons.drive_file_move_outline,
+                        onPressed: busy ? null : onMove,
+                      ),
                     if (!narrow)
                       _ActionIcon(
                         tooltip: 'Mark as seen',
@@ -1445,6 +1859,7 @@ abstract final class _FilterId {
   static const unread = 'unread';
   static const processed = 'processed';
   static const archive = 'archive';
+  static const later = 'later';
   static const tagPrefix = 'tag:';
 }
 
@@ -1490,4 +1905,66 @@ class _FocusSearchIntent extends Intent {
 
 class _CloseReaderIntent extends Intent {
   const _CloseReaderIntent();
+}
+
+class _OpenSourceIntent extends Intent {
+  const _OpenSourceIntent();
+}
+
+class _OpenSourceFromWorkspaceIntent extends Intent {
+  const _OpenSourceFromWorkspaceIntent();
+}
+
+class _WorkspaceOpenAction extends Action<_OpenSourceFromWorkspaceIntent> {
+  _WorkspaceOpenAction({
+    required this.isWorkspaceFocused,
+    required this.onOpen,
+  });
+
+  final bool Function() isWorkspaceFocused;
+  final VoidCallback onOpen;
+
+  @override
+  bool isEnabled(_OpenSourceFromWorkspaceIntent intent) {
+    return isWorkspaceFocused();
+  }
+
+  @override
+  Object? invoke(_OpenSourceFromWorkspaceIntent intent) {
+    onOpen();
+    return null;
+  }
+}
+
+class _GuardedAction<T extends Intent> extends Action<T> {
+  _GuardedAction({required this.canInvoke, required this.onInvoke});
+
+  final bool Function() canInvoke;
+  final Object? Function(T intent) onInvoke;
+
+  @override
+  bool isEnabled(T intent) => canInvoke();
+
+  @override
+  Object? invoke(T intent) => onInvoke(intent);
+}
+
+class _ArchiveSourceIntent extends Intent {
+  const _ArchiveSourceIntent();
+}
+
+class _DeleteSourceIntent extends Intent {
+  const _DeleteSourceIntent();
+}
+
+class _MoveSourceIntent extends Intent {
+  const _MoveSourceIntent();
+}
+
+class _MoveToLaterIntent extends Intent {
+  const _MoveToLaterIntent();
+}
+
+class _KeyboardHelpIntent extends Intent {
+  const _KeyboardHelpIntent();
 }
