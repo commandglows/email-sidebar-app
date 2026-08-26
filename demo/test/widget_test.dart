@@ -12,7 +12,7 @@ void main() {
     addTearDown(tester.view.resetDevicePixelRatio);
 
     await tester.pumpWidget(const SourceSidebarPreviewApp());
-    expect(find.text('Reader source library'), findsOneWidget);
+    expect(find.text('Sources'), findsOneWidget);
 
     await tester.tap(find.textContaining('Designing resilient').first);
     await tester.pumpAndSettle();
@@ -32,7 +32,8 @@ void main() {
 
     await tester.pumpWidget(const SourceSidebarPreviewApp());
 
-    expect(find.text('Reader source library'), findsOneWidget);
-    expect(find.byTooltip('Refresh sources'), findsOneWidget);
+    expect(find.text('Sources'), findsOneWidget);
+    expect(find.byTooltip('Source filters'), findsOneWidget);
+    expect(find.byTooltip('Refresh sources'), findsWidgets);
   });
 }

@@ -20,7 +20,7 @@ class _SourceSidebarPreviewAppState extends State<SourceSidebarPreviewApp> {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'Source Sidebar — Flutter preview',
+      title: 'Sources — Flutter preview',
       theme: PreviewTheme.light(),
       darkTheme: PreviewTheme.dark(),
       themeMode: _themeMode,
@@ -89,12 +89,16 @@ class _SourceLibraryDemoState extends State<SourceLibraryDemo> {
   }
 
   Future<void> _archive(SourceSidebarItem item) async {
-    _remove(item);
-    _notify('Archived in this demo. Refresh to restore it.');
+    _replace(item, location: 'archive');
+    setState(() => _selectedId = null);
+    _notify('Moved to Archived in this demo.');
   }
 
   Future<void> _delete(SourceSidebarItem item) async {
-    _remove(item);
+    setState(() {
+      _items = _items.where((candidate) => candidate.id != item.id).toList();
+      _selectedId = null;
+    });
     _notify('Deleted from this demo. Refresh to restore it.');
   }
 
@@ -102,9 +106,14 @@ class _SourceLibraryDemoState extends State<SourceLibraryDemo> {
     _notify('External Reader links are disabled in the public demo.');
   }
 
+  Future<void> _openLibrary() async {
+    _notify('Readwise is disconnected from this synthetic public demo.');
+  }
+
   void _replace(
     SourceSidebarItem source, {
     bool? seen,
+    String? location,
     List<String>? tags,
     SourceProcessingState? processingState,
   }) {
@@ -122,20 +131,13 @@ class _SourceLibraryDemoState extends State<SourceLibraryDemo> {
                     content: item.content,
                     tags: tags ?? item.tags,
                     seen: seen ?? item.seen,
-                    location: item.location,
+                    location: location ?? item.location,
                     processingState: processingState ?? item.processingState,
                     canonicalExternalUrl: item.canonicalExternalUrl,
                   )
                 : item,
           )
           .toList(growable: false);
-    });
-  }
-
-  void _remove(SourceSidebarItem source) {
-    setState(() {
-      _items = _items.where((item) => item.id != source.id).toList();
-      if (_selectedId == source.id) _selectedId = null;
     });
   }
 
@@ -148,29 +150,31 @@ class _SourceLibraryDemoState extends State<SourceLibraryDemo> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Source Sidebar · Flutter preview'),
-        actions: [
-          const Center(child: Chip(label: Text('Synthetic data'))),
-          IconButton(
-            tooltip: widget.darkMode ? 'Use light theme' : 'Use dark theme',
-            onPressed: () => widget.onThemeChanged(!widget.darkMode),
-            icon: Icon(
-              widget.darkMode
-                  ? Icons.light_mode_outlined
-                  : Icons.dark_mode_outlined,
-            ),
-          ),
-        ],
-      ),
       body: SafeArea(
         child: SourceSidebar(
-          title: 'Reader source library',
+          title: 'Sources',
           items: _items,
           selectedId: _selectedId,
           isLoading: _loading,
+          style: PreviewTheme.sidebarStyle(widget.darkMode),
+          topBarActions: [
+            IconButton(
+              tooltip: widget.darkMode ? 'Use light theme' : 'Use dark theme',
+              onPressed: () => widget.onThemeChanged(!widget.darkMode),
+              icon: Icon(
+                widget.darkMode
+                    ? Icons.light_mode_outlined
+                    : Icons.dark_mode_outlined,
+              ),
+            ),
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 8),
+              child: CircleAvatar(radius: 16, child: Text('D')),
+            ),
+          ],
           onSelected: (id) => setState(() => _selectedId = id),
           onRefresh: _refresh,
+          onOpenLibrary: _openLibrary,
           onIngest: _ingest,
           onMarkSeen: _markSeen,
           onArchive: _archive,
@@ -183,66 +187,147 @@ class _SourceLibraryDemoState extends State<SourceLibraryDemo> {
 }
 
 List<SourceSidebarItem> _previewSources() => [
-  SourceSidebarItem(
+  _source(
     id: 'flutter-architecture',
+    publisher: 'Flutter Engineering Weekly',
     title: 'Designing resilient Flutter application boundaries',
-    authorOrPublisher: 'Flutter Engineering Weekly',
-    summary:
-        'A practical field guide to keeping product decisions separate from provider adapters.',
-    publishedAt: DateTime.utc(2026, 8, 25),
-    sourceType: 'newsletter',
+    summary: 'Keep product decisions separate from provider adapters.',
+    day: 25,
+    tags: const ['shipglows-ready', 'flutter'],
     content:
         '''A resilient Flutter application keeps presentation, domain decisions, and external providers behind clear boundaries.
 
 This synthetic article demonstrates the long-form reading state. Select text, search the library, switch themes, and send the source to a project to evaluate the complete interaction.''',
-    tags: const ['shipglows-ready', 'flutter'],
-    canonicalExternalUrl: Uri.https('readwise.io', '/reader'),
   ),
-  SourceSidebarItem(
+  _source(
     id: 'security-roundup',
+    publisher: 'Practical AppSec Dispatch',
     title: 'Security signals worth tracking this week',
-    authorOrPublisher: 'Practical AppSec Dispatch',
-    summary:
-        'Authentication hardening, dependency provenance, and prompt-injection boundaries.',
-    publishedAt: DateTime.utc(2026, 8, 24),
-    sourceType: 'email',
-    content:
-        '''Three themes matter this week: authoritative authorization checks, dependency provenance, and treating all imported content as untrusted data.
-
-The production adapters delimit source material before it reaches an agent. This public preview contains no credentials and performs no network mutation.''',
+    summary: 'Authentication, provenance, and prompt-injection boundaries.',
+    day: 24,
     tags: const ['shipglows-ready', 'security'],
-    canonicalExternalUrl: Uri.https('readwise.io', '/reader'),
   ),
-  SourceSidebarItem(
+  _source(
     id: 'content-systems',
+    publisher: 'Editorial Systems',
     title: 'Repurposing research without losing provenance',
-    authorOrPublisher: 'Editorial Systems',
-    summary:
-        'How a shared source library can feed distinct project workflows without becoming a monolith.',
-    publishedAt: DateTime.utc(2026, 8, 22),
-    sourceType: 'newsletter',
-    content:
-        '''A source library should own capture and reading. Each product should retain ownership of what happens after selection.
-
-ContentGlows creates an Idea Pool outcome. ShipGlows starts a governed agent conversation. Both applications reuse this same Flutter presentation package.''',
+    summary: 'One source library can feed distinct project workflows.',
+    day: 23,
     tags: const ['contentglows-ready', 'workflow'],
     seen: true,
-    canonicalExternalUrl: Uri.https('readwise.io', '/reader'),
   ),
-  SourceSidebarItem(
+  _source(
+    id: 'dependency-health',
+    publisher: 'Dependency Health',
+    title: 'The maintenance signals hidden in release notes',
+    summary: 'What to extract before an upgrade becomes urgent.',
+    day: 22,
+    tags: const ['shipglows-ready', 'maintenance'],
+  ),
+  _source(
     id: 'reader-workflow',
+    publisher: 'Knowledge Ops Notes',
     title: 'A calmer workflow for newsletter research',
-    authorOrPublisher: 'Knowledge Ops Notes',
-    summary:
-        'Capture once, review deliberately, and distribute only when a project needs the source.',
-    publishedAt: DateTime.utc(2026, 8, 20),
-    sourceType: 'article',
-    content:
-        '''The useful unit is not the inbox message. It is a durable source with provenance, readable content, and explicit project actions.
-
-Try Ctrl or Command + F to focus search. Use J and K, or the arrow keys, to move through the filtered list.''',
+    summary: 'Capture once, review deliberately, distribute when useful.',
+    day: 21,
     tags: const ['research', 'reader'],
     seen: true,
-    canonicalExternalUrl: Uri.https('readwise.io', '/reader'),
+  ),
+  _source(
+    id: 'health-storytelling',
+    publisher: 'Health Narrative Lab',
+    title: 'Turning expert interviews into trustworthy stories',
+    summary: 'A provenance-first framework for health content.',
+    day: 20,
+    tags: const ['contentglows-ready', 'health'],
+    seen: true,
+  ),
+  _source(
+    id: 'browser-security',
+    publisher: 'Browser Security Brief',
+    title: 'Passkeys, sessions, and safer recovery flows',
+    summary: 'Practical implementation notes from production teams.',
+    day: 19,
+    tags: const ['shipglows-ready', 'security'],
+  ),
+  _source(
+    id: 'editorial-angles',
+    publisher: 'The Editorial Operator',
+    title: 'Seven ways to find a sharper content angle',
+    summary: 'Move from collected sources to defensible points of view.',
+    day: 18,
+    tags: const ['contentglows-ready', 'research'],
+    processed: true,
+  ),
+  _source(
+    id: 'flutter-performance',
+    publisher: 'Flutter Performance Notes',
+    title: 'Frame budgets for dense information interfaces',
+    summary: 'Keep scrolling smooth without flattening the experience.',
+    day: 17,
+    tags: const ['shipglows-ready', 'flutter'],
+    seen: true,
+  ),
+  _source(
+    id: 'business-models',
+    publisher: 'Independent Business Review',
+    title: 'Where small software products gain leverage',
+    summary: 'Distribution and workflow advantages worth studying.',
+    day: 16,
+    tags: const ['contentglows-ready', 'business'],
+  ),
+  _source(
+    id: 'supply-chain',
+    publisher: 'Secure Supply Chain',
+    title: 'A field checklist for package provenance',
+    summary: 'Attestations, lockfiles, and the controls between them.',
+    day: 15,
+    tags: const ['shipglows-ready', 'security'],
+    processed: true,
+    seen: true,
+  ),
+  _source(
+    id: 'archived-example',
+    publisher: 'Product Systems Archive',
+    title: 'A source already reviewed and archived',
+    summary: 'Synthetic data for testing the archive navigation state.',
+    day: 14,
+    tags: const ['workflow'],
+    location: 'archive',
+    seen: true,
   ),
 ];
+
+SourceSidebarItem _source({
+  required String id,
+  required String publisher,
+  required String title,
+  required String summary,
+  required int day,
+  required List<String> tags,
+  String? content,
+  bool seen = false,
+  bool processed = false,
+  String location = 'new',
+}) {
+  return SourceSidebarItem(
+    id: id,
+    title: title,
+    authorOrPublisher: publisher,
+    summary: summary,
+    publishedAt: DateTime.utc(2026, 8, day),
+    sourceType: 'newsletter',
+    content:
+        content ??
+        '''This synthetic newsletter entry is included to test the density, reading rhythm, and project handoff of the shared Flutter source interface.
+
+Production applications provide sanitized content and decide what “Send to project” means. The shared package remains independent from Readwise and from either product architecture.''',
+    tags: tags,
+    seen: seen,
+    location: location,
+    processingState: processed
+        ? SourceProcessingState.processed
+        : SourceProcessingState.idle,
+    canonicalExternalUrl: Uri.https('readwise.io', '/reader'),
+  );
+}

@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:source_sidebar_flutter/source_sidebar_flutter.dart';
 
 void main() {
+  const expandedTestWidth = 1200.0;
   final items = [
     SourceSidebarItem(
       id: 'one',
@@ -12,13 +13,14 @@ void main() {
       publishedAt: DateTime.utc(2026, 8, 26),
       sourceType: 'email',
       content: 'Sanitized plain-text content.',
-      tags: const ['contentglows-ready'],
+      tags: const ['project-ready'],
     ),
   ];
 
   testWidgets('shows empty state', (tester) async {
     await tester.pumpWidget(
       MaterialApp(
+        theme: ThemeData(splashFactory: InkRipple.splashFactory),
         home: SourceSidebar(items: const [], onSelected: (_) {}),
       ),
     );
@@ -30,11 +32,11 @@ void main() {
     String? selectedId;
     await tester.pumpWidget(
       MaterialApp(
+        theme: ThemeData(splashFactory: InkRipple.splashFactory),
         home: SizedBox(
-          width: 1200,
+          width: expandedTestWidth,
           child: SourceSidebar(
             items: items,
-            selectedId: 'one',
             onSelected: (id) => selectedId = id,
             onIngest: (item) async => ingested = item,
           ),
@@ -44,6 +46,20 @@ void main() {
 
     await tester.tap(find.text('A useful source').first);
     expect(selectedId, 'one');
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ThemeData(splashFactory: InkRipple.splashFactory),
+        home: SizedBox(
+          width: expandedTestWidth,
+          child: SourceSidebar(
+            items: items,
+            selectedId: selectedId,
+            onSelected: (id) => selectedId = id,
+            onIngest: (item) async => ingested = item,
+          ),
+        ),
+      ),
+    );
     await tester.tap(find.text('Send to project'));
     await tester.pump();
     expect(ingested?.id, 'one');
@@ -53,8 +69,9 @@ void main() {
     var deleted = false;
     await tester.pumpWidget(
       MaterialApp(
+        theme: ThemeData(splashFactory: InkRipple.splashFactory),
         home: SizedBox(
-          width: 1200,
+          width: expandedTestWidth,
           child: SourceSidebar(
             items: items,
             selectedId: 'one',
