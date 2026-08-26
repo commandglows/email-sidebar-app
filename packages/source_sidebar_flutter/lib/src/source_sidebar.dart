@@ -64,12 +64,14 @@ class _SourceSidebarState extends State<SourceSidebar> {
   List<SourceSidebarItem> get _filteredItems {
     final query = _query.trim().toLowerCase();
     if (query.isEmpty) return widget.items;
-    return widget.items.where((item) {
-      return item.title.toLowerCase().contains(query) ||
-          item.authorOrPublisher.toLowerCase().contains(query) ||
-          item.summary.toLowerCase().contains(query) ||
-          item.tags.any((tag) => tag.toLowerCase().contains(query));
-    }).toList(growable: false);
+    return widget.items
+        .where((item) {
+          return item.title.toLowerCase().contains(query) ||
+              item.authorOrPublisher.toLowerCase().contains(query) ||
+              item.summary.toLowerCase().contains(query) ||
+              item.tags.any((tag) => tag.toLowerCase().contains(query));
+        })
+        .toList(growable: false);
   }
 
   SourceSidebarItem? get _selectedItem {
@@ -171,32 +173,21 @@ class _SourceSidebarState extends State<SourceSidebar> {
                   onBack: () => widget.onSelected(null),
                   onIngest: widget.onIngest == null
                       ? null
-                      : () => _runAction(
-                            'ingest',
-                            selected,
-                            widget.onIngest!,
-                          ),
+                      : () => _runAction('ingest', selected, widget.onIngest!),
                   onMarkSeen: widget.onMarkSeen == null
                       ? null
-                      : () => _runAction(
-                            'seen',
-                            selected,
-                            widget.onMarkSeen!,
-                          ),
+                      : () => _runAction('seen', selected, widget.onMarkSeen!),
                   onArchive: widget.onArchive == null
                       ? null
-                      : () => _runAction(
-                            'archive',
-                            selected,
-                            widget.onArchive!,
-                          ),
+                      : () =>
+                            _runAction('archive', selected, widget.onArchive!),
                   onOpenExternal: widget.onOpenExternal == null
                       ? null
                       : () => _runAction(
-                            'open',
-                            selected,
-                            widget.onOpenExternal!,
-                          ),
+                          'open',
+                          selected,
+                          widget.onOpenExternal!,
+                        ),
                   onDelete: widget.onDelete == null
                       ? null
                       : () => _confirmDelete(selected),
@@ -236,31 +227,31 @@ class _SourceSidebarState extends State<SourceSidebar> {
                             onIngest: widget.onIngest == null
                                 ? null
                                 : () => _runAction(
-                                      'ingest',
-                                      selected,
-                                      widget.onIngest!,
-                                    ),
+                                    'ingest',
+                                    selected,
+                                    widget.onIngest!,
+                                  ),
                             onMarkSeen: widget.onMarkSeen == null
                                 ? null
                                 : () => _runAction(
-                                      'seen',
-                                      selected,
-                                      widget.onMarkSeen!,
-                                    ),
+                                    'seen',
+                                    selected,
+                                    widget.onMarkSeen!,
+                                  ),
                             onArchive: widget.onArchive == null
                                 ? null
                                 : () => _runAction(
-                                      'archive',
-                                      selected,
-                                      widget.onArchive!,
-                                    ),
+                                    'archive',
+                                    selected,
+                                    widget.onArchive!,
+                                  ),
                             onOpenExternal: widget.onOpenExternal == null
                                 ? null
                                 : () => _runAction(
-                                      'open',
-                                      selected,
-                                      widget.onOpenExternal!,
-                                    ),
+                                    'open',
+                                    selected,
+                                    widget.onOpenExternal!,
+                                  ),
                             onDelete: widget.onDelete == null
                                 ? null
                                 : () => _confirmDelete(selected),
@@ -323,7 +314,10 @@ class _ListPane extends StatelessWidget {
             child: Row(
               children: [
                 Expanded(
-                  child: Text(title, style: Theme.of(context).textTheme.titleLarge),
+                  child: Text(
+                    title,
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
                 ),
                 if (onRefresh != null)
                   IconButton(
@@ -490,7 +484,8 @@ class _DetailPane extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final busy = pendingAction != null ||
+    final busy =
+        pendingAction != null ||
         item.processingState == SourceProcessingState.processing;
     return Material(
       color: Theme.of(context).colorScheme.surface,
@@ -604,11 +599,7 @@ class _ActionIcon extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return IconButton(
-      tooltip: tooltip,
-      onPressed: onPressed,
-      icon: Icon(icon),
-    );
+    return IconButton(tooltip: tooltip, onPressed: onPressed, icon: Icon(icon));
   }
 }
 
@@ -650,10 +641,7 @@ class _MessageState extends StatelessWidget {
             Text(message, textAlign: TextAlign.center),
             if (actionLabel != null && onAction != null) ...[
               const SizedBox(height: 12),
-              OutlinedButton(
-                onPressed: onAction,
-                child: Text(actionLabel!),
-              ),
+              OutlinedButton(onPressed: onAction, child: Text(actionLabel!)),
             ],
           ],
         ),

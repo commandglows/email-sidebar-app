@@ -34,6 +34,5 @@ class SourceSidebarItem {
 }
 
 typedef SourceItemCallback = Future<void> Function(SourceSidebarItem item);
-typedef SourceItemsCallback = Future<void> Function(
-  List<SourceSidebarItem> items,
-);
+typedef SourceItemsCallback =
+    Future<void> Function(List<SourceSidebarItem> items);
