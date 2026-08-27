@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.4.0
+
+- Renamed the visible label concept to Categories and added host-defined names,
+  colors, and icons while keeping `SourceSidebarItem.tags` compatible.
+- Added accessible fallback presentation for category identifiers without a
+  host definition.
+- Added bounded whole-interface zoom with Ctrl/Command+wheel and a customizable
+  Ctrl/Command+0 reset command, without replacing native text scaling.
+- Made keyboard row navigation reclaim primary focus from toolbar controls so
+  the active cursor, focus styling, and Enter activation remain synchronized.
+
 ## 0.3.0
 
 - Added complete, host-customizable keyboard navigation with Glows defaults:

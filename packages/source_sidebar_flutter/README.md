@@ -1,9 +1,9 @@
 # source_sidebar_flutter
 
 A provider-neutral Flutter source workspace rebuilt from the interaction and
-visual grammar of the v0 React prototype in this repository.
+visual grammar of the original prototype in this repository.
 
-The package owns the global search header, left navigation and labels, dense
+The package owns the global search header, left navigation and categories, dense
 inbox rows, in-place reading, responsive behavior, keyboard focus, accessible
 actions, and state presentation. It deliberately does not know about Readwise,
 authentication, project routing, agents, or persistence. Applications supply
@@ -25,13 +25,25 @@ SourceSidebar(
   ],
   laterDestinationId: 'later',
   onMove: moveSource,
+  categories: const [
+    SourceCategory(
+      id: 'security',
+      name: 'Cybersecurity',
+      color: Color(0xFFB3261E),
+      icon: Icons.shield_outlined,
+    ),
+  ],
 )
 ```
 
 Hosts can map their semantic palette through `SourceSidebarStyle.colors` and
 can add provider-neutral widgets to `topBarActions`. The package includes
-inbox, unread, processed, archived, search, and tag filters without mutating
-the supplied collection.
+inbox, unread, processed, archived, search, and category filters without
+mutating the supplied collection. `SourceSidebarItem.tags` remains the stable,
+backwards-compatible list of category identifiers. Definitions supplied through
+`categories` control their visible name, color, and icon. An unknown identifier
+remains usable and accessible with its raw value and the fallback label icon.
+If definitions repeat an identifier, the last definition wins.
 
 Consumers should pin an immutable Git commit:
 
@@ -58,6 +70,9 @@ Flutter's native focus traversal and button activation.
 Alphabetic commands are ignored whenever any editable text control owns focus.
 The active row uses `SourceSidebarColors.focus`, regains focus after dialogs and
 actions, and is scrolled into view during keyboard navigation.
+Using `J/K` or the arrow keys also transfers primary focus from any previously
+tabbed toolbar control to the active source row, so focus styling and native
+Enter activation remain synchronized.
 
 When `laterDestinationId` is configured, Later appears as a counted navigation
 state and those items leave Inbox while remaining recoverable there. Without
@@ -77,3 +92,15 @@ shortcuts: const SourceSidebarShortcuts(
 If two customized bindings collide, the later command in the documented
 constructor order wins. Move destinations are host-owned identifiers and
 labels; the package does not translate them into provider API concepts.
+
+## Interface zoom
+
+Ctrl/Command+mouse wheel scales the complete workspace, including layout,
+icons, spacing, and text. Responsive breakpoints are recalculated against the
+zoomed logical viewport, ordinary wheel scrolling is left untouched, and the
+ambient Flutter text scaler continues to apply. Ctrl/Command+0 resets the
+workspace to `SourceSidebarStyle.initialZoom`.
+
+Hosts can configure `minimumZoom`, `maximumZoom`, `initialZoom`, and `zoomStep`
+through `SourceSidebarStyle`. They can replace or disable the reset shortcut
+through `SourceSidebarShortcuts.resetZoom`.

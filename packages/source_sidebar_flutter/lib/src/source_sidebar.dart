@@ -1,6 +1,8 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import 'source_category.dart';
 import 'source_move_destination.dart';
 import 'source_sidebar_item.dart';
 import 'source_sidebar_shortcuts.dart';
@@ -30,6 +32,7 @@ class SourceSidebar extends StatefulWidget {
     this.onMove,
     this.moveDestinations = const <SourceMoveDestination>[],
     this.laterDestinationId,
+    this.categories = const <SourceCategory>[],
     this.shortcuts = const SourceSidebarShortcuts(),
     this.topBarActions = const <Widget>[],
   });
@@ -55,6 +58,7 @@ class SourceSidebar extends StatefulWidget {
   final SourceMoveCallback? onMove;
   final List<SourceMoveDestination> moveDestinations;
   final String? laterDestinationId;
+  final List<SourceCategory> categories;
   final SourceSidebarShortcuts shortcuts;
   final List<Widget> topBarActions;
 
@@ -68,10 +72,18 @@ class _SourceSidebarState extends State<SourceSidebar> {
   final _workspaceFocus = FocusNode(debugLabel: 'Source sidebar workspace');
   final _listScrollController = ScrollController();
   final _rowKeys = <String, GlobalKey>{};
+  final _rowFocusNodes = <String, FocusNode>{};
   String _query = '';
   String _filterId = _FilterId.inbox;
   String? _pendingAction;
   String? _activeId;
+  late double _zoom;
+
+  @override
+  void initState() {
+    super.initState();
+    _zoom = widget.style.initialZoom;
+  }
 
   @override
   void dispose() {
@@ -79,6 +91,9 @@ class _SourceSidebarState extends State<SourceSidebar> {
     _searchFocus.dispose();
     _workspaceFocus.dispose();
     _listScrollController.dispose();
+    for (final node in _rowFocusNodes.values) {
+      node.dispose();
+    }
     super.dispose();
   }
 
@@ -96,11 +111,39 @@ class _SourceSidebarState extends State<SourceSidebar> {
         !widget.items.any((item) => item.id == _activeId)) {
       _activeId = null;
     }
+    final itemIds = widget.items.map((item) => item.id).toSet();
+    final removedIds = _rowFocusNodes.keys
+        .where((id) => !itemIds.contains(id))
+        .toList(growable: false);
+    for (final id in removedIds) {
+      _rowFocusNodes.remove(id)?.dispose();
+      _rowKeys.remove(id);
+    }
+    _zoom = _zoom.clamp(
+      widget.style.minimumZoom,
+      widget.style.maximumZoom,
+    ).toDouble();
   }
 
   SourceSidebarColors get _colors =>
       widget.style.colors ??
       SourceSidebarColors.fromColorScheme(Theme.of(context).colorScheme);
+
+  Map<String, SourceCategory> get _categoryById => {
+    for (final category in widget.categories) category.id: category,
+  };
+
+  SourceCategory _categoryFor(String id) {
+    return _categoryById[id] ??
+        SourceCategory(
+          id: id,
+          name: id,
+          color: _colors.focus.withValues(
+            alpha: widget.style.categoryFallbackOpacity,
+          ),
+          icon: Icons.label_outline,
+        );
+  }
 
   List<SourceSidebarItem> get _visibleItems {
     final query = _query.trim().toLowerCase();
@@ -111,7 +154,11 @@ class _SourceSidebarState extends State<SourceSidebar> {
               item.title.toLowerCase().contains(query) ||
               item.authorOrPublisher.toLowerCase().contains(query) ||
               item.summary.toLowerCase().contains(query) ||
-              item.tags.any((tag) => tag.toLowerCase().contains(query));
+              item.tags.any(
+                (tag) =>
+                    tag.toLowerCase().contains(query) ||
+                    _categoryFor(tag).name.toLowerCase().contains(query),
+              );
           if (!matchesQuery) return false;
           return switch (_filterId) {
             _FilterId.inbox =>
@@ -211,7 +258,9 @@ class _SourceSidebarState extends State<SourceSidebar> {
       _FilterId.later => 'Later',
       _ =>
         _filterId.startsWith(_FilterId.tagPrefix)
-            ? _filterId.substring(_FilterId.tagPrefix.length)
+            ? _categoryFor(
+                _filterId.substring(_FilterId.tagPrefix.length),
+              ).name
             : 'Sources',
     };
   }
@@ -238,6 +287,7 @@ class _SourceSidebarState extends State<SourceSidebar> {
       widget.onSelected(items[next].id);
     } else {
       setState(() => _activeId = items[next].id);
+      _focusActiveRow();
       _ensureActiveVisible();
     }
   }
@@ -288,15 +338,20 @@ class _SourceSidebarState extends State<SourceSidebar> {
           });
         }
       }
-      _workspaceFocus.requestFocus();
+      final rowFocus = _rowFocusNodes[_activeId];
+      if (rowFocus?.context != null) {
+        rowFocus!.requestFocus();
+      } else {
+        _workspaceFocus.requestFocus();
+      }
       _ensureActiveVisible();
     });
   }
 
   void _ensureActiveVisible() {
-    final rowContext = _rowKeys[_activeId]?.currentContext;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
+      final rowContext = _rowKeys[_activeId]?.currentContext;
       if (rowContext != null && rowContext.mounted) {
         Scrollable.ensureVisible(
           rowContext,
@@ -319,6 +374,39 @@ class _SourceSidebarState extends State<SourceSidebar> {
       );
     });
   }
+
+  void _focusActiveRow() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _rowFocusNodes[_activeId]?.requestFocus();
+    });
+  }
+
+  void _handlePointerSignal(PointerSignalEvent event) {
+    if (event is! PointerScrollEvent ||
+        (!HardwareKeyboard.instance.isControlPressed &&
+            !HardwareKeyboard.instance.isMetaPressed)) {
+      return;
+    }
+    GestureBinding.instance.pointerSignalResolver.register(event, (
+      resolvedEvent,
+    ) {
+      final scrollEvent = resolvedEvent as PointerScrollEvent;
+      if (scrollEvent.scrollDelta.dy == 0) return;
+      final direction = scrollEvent.scrollDelta.dy < 0 ? 1 : -1;
+      _setZoom(_zoom + direction * widget.style.zoomStep);
+    });
+  }
+
+  void _setZoom(double value) {
+    final next = value
+        .clamp(widget.style.minimumZoom, widget.style.maximumZoom)
+        .toDouble();
+    if (next == _zoom) return;
+    setState(() => _zoom = next);
+  }
+
+  void _resetZoom() => _setZoom(widget.style.initialZoom);
 
   Future<void> _runAction(
     String name,
@@ -492,6 +580,7 @@ class _SourceSidebarState extends State<SourceSidebar> {
     if (canMoveToLater) {
       add(widget.shortcuts.moveToLater, 'Move to Later');
     }
+    add(widget.shortcuts.resetZoom, 'Reset zoom');
     add(widget.shortcuts.help, 'Show this help');
     return rows;
   }
@@ -552,6 +641,7 @@ class _SourceSidebarState extends State<SourceSidebar> {
     bind(widget.shortcuts.delete, const _DeleteSourceIntent());
     bind(widget.shortcuts.move, const _MoveSourceIntent());
     bind(widget.shortcuts.moveToLater, const _MoveToLaterIntent());
+    bind(widget.shortcuts.resetZoom, const _ResetZoomIntent());
     bind(widget.shortcuts.help, const _KeyboardHelpIntent());
     return shortcuts;
   }
@@ -569,6 +659,7 @@ class _SourceSidebarState extends State<SourceSidebar> {
           selectedFilterId: _filterId,
           showLater: widget.laterDestinationId != null,
           tags: _tags,
+          categoryFor: _categoryFor,
           countFor: _countFor,
           onOpenLibrary: widget.onOpenLibrary,
           onFilterSelected: (id) {
@@ -627,15 +718,21 @@ class _SourceSidebarState extends State<SourceSidebar> {
             canInvoke: () => !_isEditingText,
             onInvoke: (_) => _moveToLater(),
           ),
+          _ResetZoomIntent: CallbackAction<_ResetZoomIntent>(
+            onInvoke: (_) => _resetZoom(),
+          ),
           _KeyboardHelpIntent: _GuardedAction<_KeyboardHelpIntent>(
             canInvoke: () => !_isEditingText,
             onInvoke: (_) => _showKeyboardHelp(),
           ),
         },
-        child: Focus(
-          focusNode: _workspaceFocus,
-          autofocus: true,
-          child: LayoutBuilder(
+        child: _ZoomViewport(
+          zoom: _zoom,
+          onPointerSignal: _handlePointerSignal,
+          child: Focus(
+            focusNode: _workspaceFocus,
+            autofocus: true,
+            child: LayoutBuilder(
             builder: (context, constraints) {
               final compact =
                   constraints.maxWidth < widget.style.compactBreakpoint;
@@ -672,6 +769,7 @@ class _SourceSidebarState extends State<SourceSidebar> {
                                 selectedFilterId: _filterId,
                                 showLater: widget.laterDestinationId != null,
                                 tags: _tags,
+                                categoryFor: _categoryFor,
                                 countFor: _countFor,
                                 onOpenLibrary: widget.onOpenLibrary,
                                 onFilterSelected: _selectFilter,
@@ -691,8 +789,10 @@ class _SourceSidebarState extends State<SourceSidebar> {
                                     compact: compact,
                                     style: widget.style,
                                     colors: _colors,
+                                    categoryFor: _categoryFor,
                                     onSelected: widget.onSelected,
                                     rowKeys: _rowKeys,
+                                    rowFocusNodes: _rowFocusNodes,
                                     scrollController: _listScrollController,
                                     onActiveChanged: (id) =>
                                         setState(() => _activeId = id),
@@ -704,6 +804,7 @@ class _SourceSidebarState extends State<SourceSidebar> {
                                     items: _visibleItems,
                                     style: widget.style,
                                     colors: _colors,
+                                    categoryFor: _categoryFor,
                                     pendingAction: _pendingAction,
                                     onBack: _closeReader,
                                     onPrevious: () => _moveSelection(-1),
@@ -755,8 +856,48 @@ class _SourceSidebarState extends State<SourceSidebar> {
                 ),
               );
             },
+            ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _ZoomViewport extends StatelessWidget {
+  const _ZoomViewport({
+    required this.zoom,
+    required this.onPointerSignal,
+    required this.child,
+  });
+
+  final double zoom;
+  final ValueChanged<PointerSignalEvent> onPointerSignal;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Listener(
+      onPointerSignal: onPointerSignal,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          if (!constraints.hasBoundedWidth || !constraints.hasBoundedHeight) {
+            return child;
+          }
+          return ClipRect(
+            child: FittedBox(
+              key: const ValueKey('source-sidebar-zoom'),
+              alignment: Alignment.topLeft,
+              fit: BoxFit.fill,
+              child: SizedBox(
+                key: const ValueKey('source-sidebar-zoom-content'),
+                width: constraints.maxWidth / zoom,
+                height: constraints.maxHeight / zoom,
+                child: child,
+              ),
+            ),
+          );
+        },
       ),
     );
   }
@@ -947,6 +1088,7 @@ class _NavigationPane extends StatelessWidget {
     required this.selectedFilterId,
     required this.showLater,
     required this.tags,
+    required this.categoryFor,
     required this.countFor,
     required this.onOpenLibrary,
     required this.onFilterSelected,
@@ -958,6 +1100,7 @@ class _NavigationPane extends StatelessWidget {
   final String selectedFilterId;
   final bool showLater;
   final List<String> tags;
+  final SourceCategory Function(String) categoryFor;
   final int Function(String) countFor;
   final Future<void> Function()? onOpenLibrary;
   final ValueChanged<String> onFilterSelected;
@@ -1044,7 +1187,7 @@ class _NavigationPane extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
               child: Text(
-                'Labels',
+                'Categories',
                 style: Theme.of(
                   context,
                 ).textTheme.titleSmall?.copyWith(color: colors.foreground),
@@ -1052,9 +1195,11 @@ class _NavigationPane extends StatelessWidget {
             ),
             ...tags.map((tag) {
               final id = '${_FilterId.tagPrefix}$tag';
+              final category = categoryFor(tag);
               return _NavigationItem(
-                label: tag,
-                icon: Icons.label_outline,
+                label: category.name,
+                icon: category.icon,
+                iconColor: category.color,
                 count: countFor(id),
                 selected: selectedFilterId == id,
                 style: style,
@@ -1078,6 +1223,7 @@ class _NavigationItem extends StatelessWidget {
     required this.style,
     required this.colors,
     required this.onTap,
+    this.iconColor,
   });
 
   final String label;
@@ -1087,6 +1233,7 @@ class _NavigationItem extends StatelessWidget {
   final SourceSidebarStyle style;
   final SourceSidebarColors colors;
   final VoidCallback onTap;
+  final Color? iconColor;
 
   @override
   Widget build(BuildContext context) {
@@ -1110,7 +1257,7 @@ class _NavigationItem extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
             child: Row(
               children: [
-                Icon(icon, size: style.actionIconSize),
+                Icon(icon, size: style.actionIconSize, color: iconColor),
                 SizedBox(width: style.gapLarge),
                 Expanded(
                   child: Text(
@@ -1146,8 +1293,10 @@ class _SourceInbox extends StatelessWidget {
     required this.compact,
     required this.style,
     required this.colors,
+    required this.categoryFor,
     required this.onSelected,
     required this.rowKeys,
+    required this.rowFocusNodes,
     required this.scrollController,
     required this.onActiveChanged,
     required this.onRefresh,
@@ -1165,8 +1314,10 @@ class _SourceInbox extends StatelessWidget {
   final bool compact;
   final SourceSidebarStyle style;
   final SourceSidebarColors colors;
+  final SourceCategory Function(String) categoryFor;
   final ValueChanged<String?> onSelected;
   final Map<String, GlobalKey> rowKeys;
+  final Map<String, FocusNode> rowFocusNodes;
   final ScrollController scrollController;
   final ValueChanged<String> onActiveChanged;
   final Future<void> Function()? onRefresh;
@@ -1269,6 +1420,11 @@ class _SourceInbox extends StatelessWidget {
           selected: item.id == selectedId,
           style: style,
           colors: colors,
+          categoryFor: categoryFor,
+          focusNode: rowFocusNodes.putIfAbsent(
+            item.id,
+            () => FocusNode(debugLabel: 'Source row ${item.id}'),
+          ),
           onTap: () => onSelected(item.id),
           onFocus: () => onActiveChanged(item.id),
         );
@@ -1285,6 +1441,8 @@ class _DenseSourceRow extends StatelessWidget {
     required this.selected,
     required this.style,
     required this.colors,
+    required this.categoryFor,
+    required this.focusNode,
     required this.onTap,
     required this.onFocus,
   });
@@ -1294,6 +1452,8 @@ class _DenseSourceRow extends StatelessWidget {
   final bool selected;
   final SourceSidebarStyle style;
   final SourceSidebarColors colors;
+  final SourceCategory Function(String) categoryFor;
+  final FocusNode focusNode;
   final VoidCallback onTap;
   final VoidCallback onFocus;
 
@@ -1313,6 +1473,7 @@ class _DenseSourceRow extends StatelessWidget {
       child: Material(
         color: background,
         child: InkWell(
+          focusNode: focusNode,
           focusColor: colors.focus.withValues(alpha: style.focusOverlayOpacity),
           onFocusChange: (focused) {
             if (focused) onFocus();
@@ -1435,7 +1596,11 @@ class _DenseSourceRow extends StatelessWidget {
         ),
         if (item.tags.isNotEmpty) ...[
           SizedBox(width: style.gapMedium),
-          _TagDots(tags: item.tags, style: style, colors: colors),
+          _CategoryIndicators(
+            categoryIds: item.tags,
+            categoryFor: categoryFor,
+            style: style,
+          ),
         ],
         SizedBox(width: style.gapLarge),
         SizedBox(
@@ -1489,35 +1654,41 @@ class _UnreadIndicator extends StatelessWidget {
   }
 }
 
-class _TagDots extends StatelessWidget {
-  const _TagDots({
-    required this.tags,
+class _CategoryIndicators extends StatelessWidget {
+  const _CategoryIndicators({
+    required this.categoryIds,
+    required this.categoryFor,
     required this.style,
-    required this.colors,
   });
 
-  final List<String> tags;
+  final List<String> categoryIds;
+  final SourceCategory Function(String) categoryFor;
   final SourceSidebarStyle style;
-  final SourceSidebarColors colors;
 
   @override
   Widget build(BuildContext context) {
     return Row(
       mainAxisSize: MainAxisSize.min,
-      children: tags
+      children: categoryIds
           .take(3)
           .map(
-            (tag) => Tooltip(
-              message: tag,
-              child: Padding(
-                padding: EdgeInsets.only(left: style.tagDotGap),
-                child: Icon(
-                  Icons.label,
-                  size: 10,
-                  color: colors.focus.withValues(alpha: 0.72),
+            (id) {
+              final category = categoryFor(id);
+              return Tooltip(
+                message: category.name,
+                child: Semantics(
+                  label: 'Category ${category.name}',
+                  child: Padding(
+                    padding: EdgeInsets.only(left: style.tagDotGap),
+                    child: Icon(
+                      category.icon,
+                      size: style.categoryIndicatorSize,
+                      color: category.color,
+                    ),
+                  ),
                 ),
-              ),
-            ),
+              );
+            },
           )
           .toList(growable: false),
     );
@@ -1530,6 +1701,7 @@ class _ReaderPane extends StatelessWidget {
     required this.items,
     required this.style,
     required this.colors,
+    required this.categoryFor,
     required this.pendingAction,
     required this.onBack,
     required this.onPrevious,
@@ -1546,6 +1718,7 @@ class _ReaderPane extends StatelessWidget {
   final List<SourceSidebarItem> items;
   final SourceSidebarStyle style;
   final SourceSidebarColors colors;
+  final SourceCategory Function(String) categoryFor;
   final String? pendingAction;
   final VoidCallback onBack;
   final VoidCallback onPrevious;
@@ -1734,29 +1907,47 @@ class _ReaderPane extends StatelessWidget {
                             spacing: 6,
                             runSpacing: 6,
                             children: item.tags
-                                .map(
-                                  (tag) => Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 10,
-                                      vertical: 4,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: colors.searchSurface,
-                                      borderRadius: BorderRadius.circular(
-                                        style.tagRadius,
+                                .map((id) {
+                                  final category = categoryFor(id);
+                                  return Semantics(
+                                    label: 'Category ${category.name}',
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 10,
+                                        vertical: 4,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: category.color.withValues(
+                                          alpha: style
+                                              .categoryChipBackgroundOpacity,
+                                        ),
+                                        borderRadius: BorderRadius.circular(
+                                          style.tagRadius,
+                                        ),
+                                      ),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(
+                                            category.icon,
+                                            size: style.categoryChipIconSize,
+                                            color: category.color,
+                                          ),
+                                          SizedBox(width: style.tagDotGap),
+                                          Text(
+                                            category.name,
+                                            style: Theme.of(context)
+                                                .textTheme
+                                                .labelSmall
+                                                ?.copyWith(
+                                                  color: colors.foreground,
+                                                ),
+                                          ),
+                                        ],
                                       ),
                                     ),
-                                    child: Text(
-                                      tag,
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .labelSmall
-                                          ?.copyWith(
-                                            color: colors.mutedForeground,
-                                          ),
-                                    ),
-                                  ),
-                                )
+                                  );
+                                })
                                 .toList(growable: false),
                           ),
                         ],
@@ -1957,6 +2148,10 @@ class _MoveSourceIntent extends Intent {
 
 class _MoveToLaterIntent extends Intent {
   const _MoveToLaterIntent();
+}
+
+class _ResetZoomIntent extends Intent {
+  const _ResetZoomIntent();
 }
 
 class _KeyboardHelpIntent extends Intent {

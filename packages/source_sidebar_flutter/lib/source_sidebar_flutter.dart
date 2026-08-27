@@ -1,5 +1,6 @@
 library;
 
+export 'src/source_category.dart';
 export 'src/source_move_destination.dart';
 export 'src/source_sidebar.dart';
 export 'src/source_sidebar_item.dart';

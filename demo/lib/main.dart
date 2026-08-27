@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:newsletter_studio_flutter/newsletter_studio_flutter.dart';
 import 'package:source_sidebar_flutter/source_sidebar_flutter.dart';
 
 import 'preview_theme.dart';
@@ -56,13 +57,34 @@ class _SourceLibraryDemoState extends State<SourceLibraryDemo> {
   ];
 
   late List<SourceSidebarItem> _items;
+  late NewsletterDraft _newsletterDraft;
+  late List<NewsletterSourceReference> _newsletterSources;
+  late NewsletterSchedule? _newsletterSchedule;
   String? _selectedId;
   bool _loading = false;
+  _DemoWorkspace _workspace = _DemoWorkspace.sources;
+  NewsletterAudienceSummary? _audience;
+  NewsletterTestReceipt? _testReceipt;
 
   @override
   void initState() {
     super.initState();
     _items = _previewSources();
+    _newsletterSources = _items
+        .where((item) => item.location != 'archive')
+        .map(_newsletterSourceFromItem)
+        .toList(growable: false);
+    _newsletterDraft = _previewNewsletter(_newsletterSources);
+    _newsletterSchedule = NewsletterSchedule(
+      sendAt: DateTime.now().add(const Duration(days: 1)),
+      timezoneLabel: 'Europe/Paris',
+    );
+    _audience = const NewsletterAudienceSummary(
+      id: 'contentglows-health-readers',
+      label: 'Health project · engaged readers',
+      eligibleCount: 1284,
+      excludedCount: 37,
+    );
   }
 
   Future<void> _refresh() async {
@@ -162,46 +184,299 @@ class _SourceLibraryDemoState extends State<SourceLibraryDemo> {
       ..showSnackBar(SnackBar(content: Text(message)));
   }
 
+  Future<NewsletterDraft> _saveNewsletter(NewsletterDraft draft) async {
+    await Future<void>.delayed(PreviewTheme.simulatedActionDelay);
+    return draft.copyWith(
+      revision: draft.revision + 1,
+      saveState: NewsletterSaveState.saved,
+    );
+  }
+
+  Future<NewsletterAudienceSummary> _resolveNewsletterAudience(
+    NewsletterDraft draft,
+  ) async {
+    await Future<void>.delayed(PreviewTheme.simulatedActionDelay);
+    return _audience!;
+  }
+
+  Future<List<NewsletterValidationIssue>> _validateNewsletter(
+    NewsletterDraft draft,
+    NewsletterAudienceSummary? audience,
+  ) async {
+    await Future<void>.delayed(PreviewTheme.simulatedActionDelay);
+    return const [
+      NewsletterValidationIssue(
+        id: 'dark-mode-review',
+        severity: NewsletterIssueSeverity.warning,
+        title: 'Dark-mode inbox proof deferred',
+        message: 'The synthetic preview cannot prove received-client rendering.',
+        target: 'design',
+      ),
+    ];
+  }
+
+  Future<NewsletterPreview> _renderNewsletterPreview(
+    NewsletterDraft draft,
+    NewsletterPreviewViewport viewport,
+  ) async {
+    await Future<void>.delayed(PreviewTheme.simulatedActionDelay);
+    return NewsletterPreview(
+      revision: draft.revision,
+      viewport: viewport,
+      subject: draft.subject,
+      preheader: draft.preheader,
+      plainText: draft.blocks
+          .where((block) => block.type != NewsletterBlockType.divider)
+          .map((block) => block.text)
+          .join('\n\n'),
+    );
+  }
+
+  Future<NewsletterTestReceipt> _sendNewsletterTest(
+    NewsletterDraft draft,
+  ) async {
+    await Future<void>.delayed(PreviewTheme.simulatedActionDelay);
+    final receipt = NewsletterTestReceipt(
+      operationId: 'demo-test-${draft.revision}',
+      draftRevision: draft.revision,
+      message: 'Synthetic test completed.',
+      recipientLabel: 'Diane · demo inbox',
+      sentAt: DateTime.now(),
+    );
+    setState(() => _testReceipt = receipt);
+    _notify('Synthetic test completed. No email was sent.');
+    return receipt;
+  }
+
+  Future<NewsletterOperationReceipt> _scheduleNewsletter(
+    NewsletterDraft draft,
+    NewsletterSchedule schedule,
+  ) async {
+    await Future<void>.delayed(PreviewTheme.simulatedActionDelay);
+    if (mounted) {
+      setState(() => _newsletterSchedule = schedule);
+      _notify('Schedule accepted by the synthetic demo only.');
+    }
+    return NewsletterOperationReceipt(
+      operationId: 'demo-schedule-${draft.revision}',
+      draftRevision: draft.revision,
+      message: 'Synthetic schedule accepted.',
+    );
+  }
+
+  Future<void> _unscheduleNewsletter(String draftId) async {
+    await Future<void>.delayed(PreviewTheme.simulatedActionDelay);
+    if (!mounted) return;
+    setState(() => _newsletterSchedule = null);
+    _notify('Synthetic schedule removed. No provider was contacted.');
+  }
+
+  Future<NewsletterDeliveryStatus> _loadNewsletterDeliveryStatus(
+    String draftId,
+  ) async {
+    await Future<void>.delayed(PreviewTheme.simulatedActionDelay);
+    return NewsletterDeliveryStatus(
+      state: _newsletterSchedule == null
+          ? NewsletterDeliveryState.draft
+          : NewsletterDeliveryState.scheduled,
+      message: _newsletterSchedule == null
+          ? 'Synthetic draft has no active delivery.'
+          : 'Synthetic schedule is ready for host reconciliation.',
+      updatedAt: DateTime.now(),
+      operationId: 'demo-status-${_newsletterDraft.revision}',
+    );
+  }
+
+  Future<Map<String, num>> _loadNewsletterAnalytics(String draftId) async {
+    await Future<void>.delayed(PreviewTheme.simulatedActionDelay);
+    return const {
+      'Delivered': 0,
+      'Unique opens': 0,
+      'Unique clicks': 0,
+    };
+  }
+
+  Future<NewsletterOperationReceipt> _sendNewsletter(
+    NewsletterDraft draft,
+  ) async {
+    await Future<void>.delayed(PreviewTheme.simulatedActionDelay);
+    _notify('Send accepted by the synthetic demo. No email was sent.');
+    return NewsletterOperationReceipt(
+      operationId: 'demo-send-${draft.revision}',
+      draftRevision: draft.revision,
+      message: 'Synthetic send accepted.',
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: SafeArea(
-        child: SourceSidebar(
-          title: 'Sources',
-          items: _items,
-          selectedId: _selectedId,
-          isLoading: _loading,
-          style: PreviewTheme.sidebarStyle(widget.darkMode),
-          topBarActions: [
-            IconButton(
-              tooltip: widget.darkMode ? 'Use light theme' : 'Use dark theme',
-              onPressed: () => widget.onThemeChanged(!widget.darkMode),
-              icon: Icon(
-                widget.darkMode
-                    ? Icons.light_mode_outlined
-                    : Icons.dark_mode_outlined,
+        child: switch (_workspace) {
+          _DemoWorkspace.sources => SourceSidebar(
+              title: 'Sources',
+              items: _items,
+              selectedId: _selectedId,
+              isLoading: _loading,
+              style: PreviewTheme.sidebarStyle(widget.darkMode),
+              categories: PreviewTheme.categories(widget.darkMode),
+              topBarActions: [
+                IconButton(
+                  tooltip: 'Open Newsletter Studio',
+                  onPressed: () {
+                    setState(() => _workspace = _DemoWorkspace.newsletter);
+                  },
+                  icon: const Icon(Icons.edit_note_outlined),
+                ),
+                IconButton(
+                  tooltip: widget.darkMode
+                      ? 'Use light theme'
+                      : 'Use dark theme',
+                  onPressed: () => widget.onThemeChanged(!widget.darkMode),
+                  icon: Icon(
+                    widget.darkMode
+                        ? Icons.light_mode_outlined
+                        : Icons.dark_mode_outlined,
+                  ),
+                ),
+                const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 8),
+                  child: CircleAvatar(radius: 16, child: Text('D')),
+                ),
+              ],
+              onSelected: (id) => setState(() => _selectedId = id),
+              onRefresh: _refresh,
+              onOpenLibrary: _openLibrary,
+              onIngest: _ingest,
+              onMarkSeen: _markSeen,
+              onArchive: _archive,
+              onDelete: _delete,
+              onOpenExternal: _openExternal,
+              moveDestinations: _moveDestinations,
+              laterDestinationId: 'later',
+              onMove: _move,
+            ),
+          _DemoWorkspace.newsletter => NewsletterStudio(
+              draft: _newsletterDraft,
+              availableSources: _newsletterSources,
+              audience: _audience,
+              sender: const NewsletterSenderSummary(
+                name: 'ContentGlows Health',
+                address: 'newsletter@example.test',
+                replyTo: 'hello@example.test',
+                isVerified: true,
               ),
+              design: const NewsletterDesignSummary(
+                templateName: 'Editorial focus',
+                brandName: 'Synthetic ContentGlows',
+              ),
+              schedule: _newsletterSchedule,
+              testReceipt: _testReceipt,
+              capabilities: const NewsletterStudioCapabilities(
+                canTest: true,
+                canSchedule: true,
+                canSend: true,
+                canUnschedule: true,
+                canViewDeliveryStatus: true,
+                canViewAnalytics: true,
+              ),
+              style: PreviewTheme.newsletterStyle(widget.darkMode),
+              onDraftChanged: (draft) {
+                setState(() => _newsletterDraft = draft);
+              },
+              onSaveDraft: _saveNewsletter,
+              onResolveAudience: _resolveNewsletterAudience,
+              onValidateDraft: _validateNewsletter,
+              onRenderPreview: _renderNewsletterPreview,
+              onSendTest: _sendNewsletterTest,
+              onSchedule: _scheduleNewsletter,
+              onSend: _sendNewsletter,
+              onUnschedule: _unscheduleNewsletter,
+              onLoadDeliveryStatus: _loadNewsletterDeliveryStatus,
+              onLoadAnalytics: _loadNewsletterAnalytics,
+              onOpenSource: (sourceId) async {
+                final source = _newsletterSources.firstWhere(
+                  (candidate) => candidate.id == sourceId,
+                );
+                _notify('Opened ${source.title} in the synthetic source tray.');
+              },
+              onBack: () {
+                setState(() => _workspace = _DemoWorkspace.sources);
+              },
+              topBarActions: [
+                IconButton(
+                  tooltip: widget.darkMode
+                      ? 'Use light theme'
+                      : 'Use dark theme',
+                  onPressed: () => widget.onThemeChanged(!widget.darkMode),
+                  icon: Icon(
+                    widget.darkMode
+                        ? Icons.light_mode_outlined
+                        : Icons.dark_mode_outlined,
+                  ),
+                ),
+              ],
             ),
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 8),
-              child: CircleAvatar(radius: 16, child: Text('D')),
-            ),
-          ],
-          onSelected: (id) => setState(() => _selectedId = id),
-          onRefresh: _refresh,
-          onOpenLibrary: _openLibrary,
-          onIngest: _ingest,
-          onMarkSeen: _markSeen,
-          onArchive: _archive,
-          onDelete: _delete,
-          onOpenExternal: _openExternal,
-          moveDestinations: _moveDestinations,
-          laterDestinationId: 'later',
-          onMove: _move,
-        ),
+        },
       ),
     );
   }
+}
+
+enum _DemoWorkspace { sources, newsletter }
+
+NewsletterSourceReference _newsletterSourceFromItem(SourceSidebarItem item) {
+  return NewsletterSourceReference(
+    id: item.id,
+    title: item.title,
+    publisher: item.authorOrPublisher,
+    excerpt: item.summary,
+    canonicalUrl: item.canonicalExternalUrl,
+  );
+}
+
+NewsletterDraft _previewNewsletter(List<NewsletterSourceReference> sources) {
+  final selectedSources = sources.take(3).toList(growable: false);
+  return NewsletterDraft(
+    id: 'demo-health-weekly',
+    revision: 1,
+    title: 'Health Signals · Weekly draft',
+    subject: 'Three health stories worth understanding this week',
+    preheader: 'Evidence-led ideas, with every source kept in reach.',
+    sources: selectedSources,
+    blocks: [
+      const NewsletterBlock(
+        id: 'heading-opening',
+        type: NewsletterBlockType.heading,
+        text: 'A calmer way to read this week’s health signals',
+        isProtected: true,
+      ),
+      const NewsletterBlock(
+        id: 'text-opening',
+        type: NewsletterBlockType.text,
+        text:
+            'This synthetic draft demonstrates how sources, writing, audience checks and delivery review can stay in one focused workspace.',
+      ),
+      if (selectedSources.isNotEmpty)
+        NewsletterBlock(
+          id: 'source-${selectedSources.first.id}',
+          type: NewsletterBlockType.source,
+          text: selectedSources.first.excerpt,
+          label: selectedSources.first.title,
+          sourceId: selectedSources.first.id,
+        ),
+      const NewsletterBlock(
+        id: 'divider-one',
+        type: NewsletterBlockType.divider,
+      ),
+      const NewsletterBlock(
+        id: 'text-close',
+        type: NewsletterBlockType.text,
+        text:
+            'The public demo never contacts a provider. ContentGlows will own persistence, consent, rendering and delivery.',
+      ),
+    ],
+  );
 }
 
 List<SourceSidebarItem> _previewSources() => [

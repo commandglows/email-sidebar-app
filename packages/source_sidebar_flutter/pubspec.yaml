@@ -1,6 +1,6 @@
 name: source_sidebar_flutter
 description: Provider-neutral source inbox and reading sidebar for Flutter applications.
-version: 0.3.0
+version: 0.4.0
 repository: https://github.com/commandglows/email-sidebar-app/tree/main/packages/source_sidebar_flutter
 issue_tracker: https://github.com/commandglows/email-sidebar-app/issues
 

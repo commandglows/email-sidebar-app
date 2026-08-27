@@ -91,8 +91,26 @@ class SourceSidebarStyle {
     this.gap4XLarge = 32,
     this.readerLineHeight = 1.55,
     this.focusOverlayOpacity = 0.12,
+    this.categoryFallbackOpacity = 0.72,
+    this.categoryChipBackgroundOpacity = 0.14,
+    this.categoryIndicatorSize = 12,
+    this.categoryChipIconSize = 14,
+    this.initialZoom = 1,
+    this.minimumZoom = 0.75,
+    this.maximumZoom = 1.5,
+    this.zoomStep = 0.1,
     this.keyboardScrollDuration = const Duration(milliseconds: 120),
-  });
+  }) : assert(categoryFallbackOpacity >= 0 && categoryFallbackOpacity <= 1),
+       assert(
+         categoryChipBackgroundOpacity >= 0 &&
+             categoryChipBackgroundOpacity <= 1,
+       ),
+       assert(categoryIndicatorSize > 0),
+       assert(categoryChipIconSize > 0),
+       assert(minimumZoom > 0),
+       assert(maximumZoom >= minimumZoom),
+       assert(initialZoom >= minimumZoom && initialZoom <= maximumZoom),
+       assert(zoomStep > 0);
 
   final SourceSidebarColors? colors;
   final double compactBreakpoint;
@@ -131,5 +149,13 @@ class SourceSidebarStyle {
   final double gap4XLarge;
   final double readerLineHeight;
   final double focusOverlayOpacity;
+  final double categoryFallbackOpacity;
+  final double categoryChipBackgroundOpacity;
+  final double categoryIndicatorSize;
+  final double categoryChipIconSize;
+  final double initialZoom;
+  final double minimumZoom;
+  final double maximumZoom;
+  final double zoomStep;
   final Duration keyboardScrollDuration;
 }

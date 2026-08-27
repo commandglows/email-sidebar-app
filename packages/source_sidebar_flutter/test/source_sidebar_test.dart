@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -35,6 +36,50 @@ void main() {
       ),
     );
     expect(find.text('No sources to review.'), findsOneWidget);
+  });
+
+  testWidgets('presents host-defined categories and accessible fallbacks', (
+    tester,
+  ) async {
+    const categories = [
+      SourceCategory(
+        id: 'project-ready',
+        name: 'Ready for project',
+        color: Color(0xFF006C4C),
+        icon: Icons.rocket_launch_outlined,
+      ),
+    ];
+    final categorizedItems = [
+      items.first,
+      SourceSidebarItem(
+        id: 'fallback',
+        title: 'Unconfigured category source',
+        authorOrPublisher: 'Publisher',
+        summary: 'Summary',
+        publishedAt: DateTime.utc(2026, 8, 24),
+        sourceType: 'email',
+        content: 'Content',
+        tags: const ['unknown-category'],
+      ),
+    ];
+
+    await tester.pumpWidget(
+      _KeyboardHarness(items: categorizedItems, categories: categories),
+    );
+    await tester.pump();
+
+    expect(find.text('Categories'), findsOneWidget);
+    expect(find.text('Ready for project'), findsOneWidget);
+    expect(find.text('unknown-category'), findsOneWidget);
+    final configuredIcon = tester.widget<Icon>(
+      find.byIcon(Icons.rocket_launch_outlined).first,
+    );
+    expect(configuredIcon.color, const Color(0xFF006C4C));
+
+    await tester.tap(find.text('A useful source').first);
+    await tester.pump();
+    expect(find.text('Ready for project'), findsOneWidget);
+    expect(find.bySemanticsLabel('Category Ready for project'), findsWidgets);
   });
 
   testWidgets('selects and ingests a source', (tester) async {
@@ -128,6 +173,99 @@ void main() {
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
     await tester.pump();
     expect(find.byTooltip('Back to sources'), findsNothing);
+  });
+
+  testWidgets('J and K reclaim primary focus for the active source row', (
+    tester,
+  ) async {
+    await tester.pumpWidget(_KeyboardHarness(items: items));
+    await tester.pump();
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    await tester.pump();
+    final toolbarFocus = FocusManager.instance.primaryFocus;
+    final toolbarFocusContext = toolbarFocus?.context;
+    expect(toolbarFocus, isNotNull);
+    expect(toolbarFocusContext?.widget, isNot(isA<EditableText>()));
+    expect(
+      toolbarFocusContext?.findAncestorWidgetOfExactType<EditableText>(),
+      isNull,
+    );
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyJ);
+    await tester.pump();
+    final firstRow = tester.widget<InkWell>(
+      find.ancestor(
+        of: find.text('A useful source').first,
+        matching: find.byType(InkWell),
+      ).first,
+    );
+    expect(firstRow.focusNode?.hasPrimaryFocus, isTrue);
+    expect(FocusManager.instance.primaryFocus, isNot(same(toolbarFocus)));
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyJ);
+    await tester.pump();
+    final secondRow = tester.widget<InkWell>(
+      find.ancestor(
+        of: find.text('Another useful source').first,
+        matching: find.byType(InkWell),
+      ).first,
+    );
+    expect(secondRow.focusNode?.hasPrimaryFocus, isTrue);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyK);
+    await tester.pump();
+    expect(firstRow.focusNode?.hasPrimaryFocus, isTrue);
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyJ);
+    await tester.pump();
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pump();
+    expect(find.byTooltip('Back to sources'), findsOneWidget);
+  });
+
+  testWidgets('Ctrl+wheel zooms globally and Ctrl+0 resets zoom', (
+    tester,
+  ) async {
+    await tester.pumpWidget(_KeyboardHarness(items: items));
+    await tester.pump();
+
+    double workspaceScale() {
+      final viewport = tester.getSize(
+        find.byKey(const ValueKey('source-sidebar-zoom')),
+      );
+      final content = tester.getSize(
+        find.byKey(const ValueKey('source-sidebar-zoom-content')),
+      );
+      return viewport.width / content.width;
+    }
+
+    expect(workspaceScale(), 1);
+    await tester.sendEventToBinding(
+      const PointerScrollEvent(
+        position: Offset(600, 400),
+        scrollDelta: Offset(0, 100),
+      ),
+    );
+    await tester.pump();
+    expect(workspaceScale(), 1);
+
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    await tester.sendEventToBinding(
+      const PointerScrollEvent(
+        position: Offset(600, 400),
+        scrollDelta: Offset(0, -100),
+      ),
+    );
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+    await tester.pump();
+    expect(workspaceScale(), greaterThan(1));
+
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.digit0);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+    await tester.pump();
+    expect(workspaceScale(), 1);
   });
 
   testWidgets('W keeps destructive confirmation in the keyboard path', (
@@ -433,6 +571,7 @@ class _KeyboardHarness extends StatefulWidget {
     this.onArchive,
     this.onMove,
     this.laterDestinationId = 'later',
+    this.categories = const <SourceCategory>[],
   });
 
   final List<SourceSidebarItem> items;
@@ -441,6 +580,7 @@ class _KeyboardHarness extends StatefulWidget {
   final SourceItemCallback? onArchive;
   final SourceMoveCallback? onMove;
   final String? laterDestinationId;
+  final List<SourceCategory> categories;
 
   @override
   State<_KeyboardHarness> createState() => _KeyboardHarnessState();
@@ -467,6 +607,7 @@ class _KeyboardHarnessState extends State<_KeyboardHarness> {
             SourceMoveDestination(id: 'reference', label: 'Reference'),
           ],
           laterDestinationId: widget.laterDestinationId,
+          categories: widget.categories,
         ),
       ),
     );

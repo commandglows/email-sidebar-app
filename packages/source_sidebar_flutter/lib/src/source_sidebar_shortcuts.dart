@@ -34,6 +34,10 @@ class SourceSidebarShortcuts {
     this.delete = const [SingleActivator(LogicalKeyboardKey.keyW)],
     this.move = const [SingleActivator(LogicalKeyboardKey.keyV)],
     this.moveToLater = const [SingleActivator(LogicalKeyboardKey.keyL)],
+    this.resetZoom = const [
+      SingleActivator(LogicalKeyboardKey.digit0, control: true),
+      SingleActivator(LogicalKeyboardKey.digit0, meta: true),
+    ],
     this.help = const [SingleActivator(LogicalKeyboardKey.slash, shift: true)],
   });
 
@@ -46,5 +50,6 @@ class SourceSidebarShortcuts {
   final List<ShortcutActivator> delete;
   final List<ShortcutActivator> move;
   final List<ShortcutActivator> moveToLater;
+  final List<ShortcutActivator> resetZoom;
   final List<ShortcutActivator> help;
 }

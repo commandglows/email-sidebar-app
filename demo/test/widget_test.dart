@@ -13,6 +13,8 @@ void main() {
 
     await tester.pumpWidget(const SourceSidebarPreviewApp());
     expect(find.text('Sources'), findsOneWidget);
+    expect(find.text('Categories'), findsOneWidget);
+    expect(find.text('Cybersecurity'), findsOneWidget);
 
     await tester.tap(find.textContaining('Designing resilient').first);
     await tester.pumpAndSettle();
@@ -50,5 +52,32 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Moved to Later in this demo.'), findsOneWidget);
+  });
+
+  testWidgets('opens the unified Newsletter Studio with synthetic hooks', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1280, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(const SourceSidebarPreviewApp());
+    await tester.tap(find.byTooltip('Open Newsletter Studio'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Health Signals · Weekly draft'), findsOneWidget);
+    expect(find.text('Review and schedule'), findsOneWidget);
+    expect(find.text('Sources'), findsOneWidget);
+
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyP);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+    await tester.pumpAndSettle();
+
+    expect(
+      find.textContaining('does not prove received-client rendering'),
+      findsOneWidget,
+    );
   });
 }

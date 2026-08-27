@@ -1,7 +1,7 @@
 name: source_sidebar_preview
-description: Interactive Flutter Web preview for source_sidebar_flutter.
+description: Interactive Flutter Web preview for the shared Sources and Newsletter Studio packages.
 publish_to: none
-version: 0.2.0+2
+version: 0.4.0+4
 
 environment:
   sdk: ^3.11.0
@@ -10,6 +10,8 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  newsletter_studio_flutter:
+    path: ../packages/newsletter_studio_flutter
   source_sidebar_flutter:
     path: ../packages/source_sidebar_flutter
 
