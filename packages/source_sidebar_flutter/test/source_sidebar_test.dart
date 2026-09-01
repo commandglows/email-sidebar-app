@@ -224,9 +224,11 @@ void main() {
     expect(find.byTooltip('Back to sources'), findsOneWidget);
   });
 
-  testWidgets('Ctrl+wheel zooms globally and Ctrl+0 resets zoom', (
-    tester,
-  ) async {
+  testWidgets(
+    'Ctrl+wheel and Ctrl+pinch zooms globally and Ctrl+0 resets zoom',
+    (
+      tester,
+    ) async {
     await tester.pumpWidget(_KeyboardHarness(items: items));
     await tester.pump();
 
@@ -255,6 +257,12 @@ void main() {
       const PointerScrollEvent(
         position: Offset(600, 400),
         scrollDelta: Offset(0, -100),
+      ),
+    );
+    await tester.sendEventToBinding(
+      const PointerScaleEvent(
+        position: Offset(600, 400),
+        scale: 1.1,
       ),
     );
     await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);

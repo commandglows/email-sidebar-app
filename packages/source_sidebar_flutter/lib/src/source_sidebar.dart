@@ -383,7 +383,7 @@ class _SourceSidebarState extends State<SourceSidebar> {
   }
 
   void _handlePointerSignal(PointerSignalEvent event) {
-    if (event is! PointerScrollEvent ||
+    if ((event is! PointerScrollEvent && event is! PointerScaleEvent) ||
         (!HardwareKeyboard.instance.isControlPressed &&
             !HardwareKeyboard.instance.isMetaPressed)) {
       return;
@@ -391,9 +391,15 @@ class _SourceSidebarState extends State<SourceSidebar> {
     GestureBinding.instance.pointerSignalResolver.register(event, (
       resolvedEvent,
     ) {
-      final scrollEvent = resolvedEvent as PointerScrollEvent;
-      if (scrollEvent.scrollDelta.dy == 0) return;
-      final direction = scrollEvent.scrollDelta.dy < 0 ? 1 : -1;
+      double direction;
+      if (resolvedEvent is PointerScaleEvent) {
+        if (resolvedEvent.scale == 1.0) return;
+        direction = resolvedEvent.scale > 1.0 ? 1 : -1;
+      } else {
+        final scrollEvent = resolvedEvent as PointerScrollEvent;
+        if (scrollEvent.scrollDelta.dy == 0) return;
+        direction = scrollEvent.scrollDelta.dy < 0 ? 1 : -1;
+      }
       _setZoom(_zoom + direction * widget.style.zoomStep);
     });
   }
