@@ -1538,14 +1538,6 @@ class _DenseSourceRow extends StatelessWidget {
                   color: colors.foreground,
                 ),
               ),
-              Text(
-                item.summary,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(
-                  context,
-                ).textTheme.bodySmall?.copyWith(color: colors.mutedForeground),
-              ),
             ],
           ),
         ),
@@ -1556,8 +1548,8 @@ class _DenseSourceRow extends StatelessWidget {
   Widget _wideContent(BuildContext context, FontWeight titleWeight) {
     return Row(
       children: [
-        SizedBox(
-          width: style.publisherColumnWidth,
+        Expanded(
+          flex: 3,
           child: Text(
             item.authorOrPublisher,
             maxLines: 1,
@@ -1570,43 +1562,29 @@ class _DenseSourceRow extends StatelessWidget {
         ),
         SizedBox(width: style.gapLarge),
         Expanded(
-          child: Row(
-            children: [
-              Flexible(
-                child: Text(
-                  item.title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    fontWeight: titleWeight,
-                    color: colors.foreground,
-                  ),
-                ),
-              ),
-              Flexible(
-                child: Text(
-                  ' — ${item.summary}',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: colors.mutedForeground,
-                  ),
-                ),
-              ),
-            ],
+          flex: 6,
+          child: Text(
+            item.title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              fontWeight: titleWeight,
+              color: colors.foreground,
+            ),
           ),
         ),
-        if (item.tags.isNotEmpty) ...[
-          SizedBox(width: style.gapMedium),
-          _CategoryIndicators(
-            categoryIds: item.tags,
-            categoryFor: categoryFor,
-            style: style,
-          ),
-        ],
-        SizedBox(width: style.gapLarge),
-        SizedBox(
-          width: style.dateColumnWidth,
+        Expanded(
+          flex: 2,
+          child: item.tags.isEmpty
+              ? const SizedBox.shrink()
+              : _CategoryIndicators(
+                  categoryIds: item.tags,
+                  categoryFor: categoryFor,
+                  style: style,
+                ),
+        ),
+        Expanded(
+          flex: 2,
           child: Text(
             _dateLabel(item.publishedAt),
             textAlign: TextAlign.end,
@@ -1635,7 +1613,7 @@ class _CategoryIndicators extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Row(
-      mainAxisSize: MainAxisSize.min,
+      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
       children: categoryIds
           .take(3)
           .map(
