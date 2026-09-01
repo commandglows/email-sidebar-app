@@ -1497,8 +1497,6 @@ class _DenseSourceRow extends StatelessWidget {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _UnreadIndicator(item: item, style: style, colors: colors),
-        SizedBox(width: style.rowLeadingGap),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -1552,8 +1550,6 @@ class _DenseSourceRow extends StatelessWidget {
   Widget _wideContent(BuildContext context, FontWeight titleWeight) {
     return Row(
       children: [
-        _UnreadIndicator(item: item, style: style, colors: colors),
-        SizedBox(width: style.gapMedium),
         SizedBox(
           width: style.publisherColumnWidth,
           child: Text(
@@ -1615,41 +1611,6 @@ class _DenseSourceRow extends StatelessWidget {
           ),
         ),
       ],
-    );
-  }
-}
-
-class _UnreadIndicator extends StatelessWidget {
-  const _UnreadIndicator({
-    required this.item,
-    required this.style,
-    required this.colors,
-  });
-
-  final SourceSidebarItem item;
-  final SourceSidebarStyle style;
-  final SourceSidebarColors colors;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox.square(
-      dimension: style.actionIconSize,
-      child: Center(
-        child: item.seen
-            ? Icon(
-                Icons.article_outlined,
-                size: style.actionIconSize,
-                color: colors.mutedForeground,
-              )
-            : Container(
-                width: style.unreadIndicatorSize,
-                height: style.unreadIndicatorSize,
-                decoration: BoxDecoration(
-                  color: colors.focus,
-                  shape: BoxShape.circle,
-                ),
-              ),
-      ),
     );
   }
 }
