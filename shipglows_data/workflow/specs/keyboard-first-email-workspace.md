@@ -1,11 +1,11 @@
 ---
 artifact: implementation_spec
 metadata_schema_version: "1.0"
-artifact_version: "1.1.0"
+artifact_version: "1.1.1"
 project: email-sidebar-app
 created_at: "2026-09-02T21:39:00Z"
 updated_at: "2026-09-03T00:00:00Z"
-status: complete
+status: verified
 source_skill: 100-sg-spec
 source_model: gpt-5
 scope: keyboard-first-email-workspace
@@ -20,7 +20,7 @@ linked_systems:
 depends_on: []
 supersedes: []
 next_review: "2026-10-02"
-next_step: monitor host integration feedback
+next_step: establish the canonical code-to-documentation map before closure
 ---
 
 # Title
@@ -29,7 +29,7 @@ Keyboard-first email workspace
 
 ## Status
 
-Complete and verified in the provider-neutral package and synthetic demo.
+Implemented and verified in the provider-neutral package and synthetic demo; closure awaits the repository's canonical code-to-documentation map.
 
 ## User Story
 
@@ -186,7 +186,7 @@ None. Default bindings may remain host-customizable; the package contract, not a
 | 2026-09-02 | 101-sg-ready | gpt-5 | Reviewed behavior, risks, proof, design authority, and external keyboard guidance | ready | implementation |
 | 2026-09-03 | 102-sg-start | gpt-5 | Implemented keyboard reading, accounts, summaries, and multi-project distribution | implemented | verification |
 | 2026-09-03 | 103-sg-verify | gpt-5 | Ran analyzers, package/demo widget suites, and design-system drift scan | passed | closure |
-| 2026-09-03 | 104-sg-end | gpt-5 | Reconciled documentation, scope, and owned delivery paths | complete | ship |
+| 2026-09-03 | 104-sg-end | gpt-5 | Reconciled documentation, scope, and owned delivery paths | partial: canonical code-docs map absent | documentation governance |
 
 ## Current Chantier Flow
 
@@ -194,5 +194,5 @@ None. Default bindings may remain host-customizable; the package contract, not a
 - Readiness: ready
 - Implementation: complete
 - Verification: passed
-- Closure: complete
-- Ship: pending commit and push
+- Closure: pending canonical code-docs mapping
+- Ship: implementation pushed to main
