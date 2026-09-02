@@ -243,6 +243,9 @@ void main() {
     }
 
     expect(workspaceScale(), 1);
+    final initialViewportSize = tester.getSize(
+      find.byKey(const ValueKey('source-sidebar-zoom')),
+    );
     await tester.sendEventToBinding(
       const PointerScrollEvent(
         position: Offset(600, 400),
@@ -268,6 +271,10 @@ void main() {
     await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
     await tester.pump();
     expect(workspaceScale(), greaterThan(1));
+    expect(
+      tester.getSize(find.byKey(const ValueKey('source-sidebar-zoom'))),
+      initialViewportSize,
+    );
 
     await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
     await tester.sendKeyEvent(LogicalKeyboardKey.digit0);

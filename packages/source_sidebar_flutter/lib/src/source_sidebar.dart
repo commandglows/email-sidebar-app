@@ -890,16 +890,23 @@ class _ZoomViewport extends StatelessWidget {
           if (!constraints.hasBoundedWidth || !constraints.hasBoundedHeight) {
             return child;
           }
-          return ClipRect(
-            child: FittedBox(
-              key: const ValueKey('source-sidebar-zoom'),
-              alignment: Alignment.topLeft,
-              fit: BoxFit.fill,
-              child: SizedBox(
-                key: const ValueKey('source-sidebar-zoom-content'),
-                width: constraints.maxWidth / zoom,
-                height: constraints.maxHeight / zoom,
-                child: child,
+          return SizedBox(
+            key: const ValueKey('source-sidebar-zoom'),
+            width: constraints.maxWidth,
+            height: constraints.maxHeight,
+            child: ClipRect(
+              child: Transform.scale(
+                alignment: Alignment.topLeft,
+                scale: zoom,
+                child: FractionallySizedBox(
+                  alignment: Alignment.topLeft,
+                  widthFactor: 1 / zoom,
+                  heightFactor: 1 / zoom,
+                  child: SizedBox.expand(
+                    key: const ValueKey('source-sidebar-zoom-content'),
+                    child: child,
+                  ),
+                ),
               ),
             ),
           );
