@@ -1,6 +1,6 @@
-import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:shipglows_flutter_zoom/shipglows_flutter_zoom.dart';
 
 import 'source_category.dart';
 import 'source_move_destination.dart';
@@ -77,14 +77,6 @@ class _SourceSidebarState extends State<SourceSidebar> {
   String _filterId = _FilterId.inbox;
   String? _pendingAction;
   String? _activeId;
-  late double _zoom;
-
-  @override
-  void initState() {
-    super.initState();
-    _zoom = widget.style.initialZoom;
-  }
-
   @override
   void dispose() {
     _searchController.dispose();
@@ -119,10 +111,6 @@ class _SourceSidebarState extends State<SourceSidebar> {
       _rowFocusNodes.remove(id)?.dispose();
       _rowKeys.remove(id);
     }
-    _zoom = _zoom.clamp(
-      widget.style.minimumZoom,
-      widget.style.maximumZoom,
-    ).toDouble();
   }
 
   SourceSidebarColors get _colors =>
@@ -382,38 +370,6 @@ class _SourceSidebarState extends State<SourceSidebar> {
     });
   }
 
-  void _handlePointerSignal(PointerSignalEvent event) {
-    if ((event is! PointerScrollEvent && event is! PointerScaleEvent) ||
-        (!HardwareKeyboard.instance.isControlPressed &&
-            !HardwareKeyboard.instance.isMetaPressed)) {
-      return;
-    }
-    GestureBinding.instance.pointerSignalResolver.register(event, (
-      resolvedEvent,
-    ) {
-      double direction;
-      if (resolvedEvent is PointerScaleEvent) {
-        if (resolvedEvent.scale == 1.0) return;
-        direction = resolvedEvent.scale > 1.0 ? 1 : -1;
-      } else {
-        final scrollEvent = resolvedEvent as PointerScrollEvent;
-        if (scrollEvent.scrollDelta.dy == 0) return;
-        direction = scrollEvent.scrollDelta.dy < 0 ? 1 : -1;
-      }
-      _setZoom(_zoom + direction * widget.style.zoomStep);
-    });
-  }
-
-  void _setZoom(double value) {
-    final next = value
-        .clamp(widget.style.minimumZoom, widget.style.maximumZoom)
-        .toDouble();
-    if (next == _zoom) return;
-    setState(() => _zoom = next);
-  }
-
-  void _resetZoom() => _setZoom(widget.style.initialZoom);
-
   Future<void> _runAction(
     String name,
     SourceSidebarItem item,
@@ -647,7 +603,6 @@ class _SourceSidebarState extends State<SourceSidebar> {
     bind(widget.shortcuts.delete, const _DeleteSourceIntent());
     bind(widget.shortcuts.move, const _MoveSourceIntent());
     bind(widget.shortcuts.moveToLater, const _MoveToLaterIntent());
-    bind(widget.shortcuts.resetZoom, const _ResetZoomIntent());
     bind(widget.shortcuts.help, const _KeyboardHelpIntent());
     return shortcuts;
   }
@@ -724,17 +679,17 @@ class _SourceSidebarState extends State<SourceSidebar> {
             canInvoke: () => !_isEditingText,
             onInvoke: (_) => _moveToLater(),
           ),
-          _ResetZoomIntent: CallbackAction<_ResetZoomIntent>(
-            onInvoke: (_) => _resetZoom(),
-          ),
           _KeyboardHelpIntent: _GuardedAction<_KeyboardHelpIntent>(
             canInvoke: () => !_isEditingText,
             onInvoke: (_) => _showKeyboardHelp(),
           ),
         },
-        child: _ZoomViewport(
-          zoom: _zoom,
-          onPointerSignal: _handlePointerSignal,
+        child: FlutterZoomViewport(
+          initialZoom: widget.style.initialZoom,
+          minimumZoom: widget.style.minimumZoom,
+          maximumZoom: widget.style.maximumZoom,
+          zoomStep: widget.style.zoomStep,
+          resetShortcuts: widget.shortcuts.resetZoom,
           child: Focus(
             focusNode: _workspaceFocus,
             autofocus: true,
@@ -865,52 +820,6 @@ class _SourceSidebarState extends State<SourceSidebar> {
             ),
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _ZoomViewport extends StatelessWidget {
-  const _ZoomViewport({
-    required this.zoom,
-    required this.onPointerSignal,
-    required this.child,
-  });
-
-  final double zoom;
-  final ValueChanged<PointerSignalEvent> onPointerSignal;
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    return Listener(
-      onPointerSignal: onPointerSignal,
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          if (!constraints.hasBoundedWidth || !constraints.hasBoundedHeight) {
-            return child;
-          }
-          return SizedBox(
-            key: const ValueKey('source-sidebar-zoom'),
-            width: constraints.maxWidth,
-            height: constraints.maxHeight,
-            child: ClipRect(
-              child: Transform.scale(
-                alignment: Alignment.topLeft,
-                scale: zoom,
-                child: FractionallySizedBox(
-                  alignment: Alignment.topLeft,
-                  widthFactor: 1 / zoom,
-                  heightFactor: 1 / zoom,
-                  child: SizedBox.expand(
-                    key: const ValueKey('source-sidebar-zoom-content'),
-                    child: child,
-                  ),
-                ),
-              ),
-            ),
-          );
-        },
       ),
     );
   }
@@ -2100,10 +2009,6 @@ class _MoveSourceIntent extends Intent {
 
 class _MoveToLaterIntent extends Intent {
   const _MoveToLaterIntent();
-}
-
-class _ResetZoomIntent extends Intent {
-  const _ResetZoomIntent();
 }
 
 class _KeyboardHelpIntent extends Intent {

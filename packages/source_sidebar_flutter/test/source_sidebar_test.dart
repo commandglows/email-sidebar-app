@@ -234,17 +234,17 @@ void main() {
 
     double workspaceScale() {
       final viewport = tester.getSize(
-        find.byKey(const ValueKey('source-sidebar-zoom')),
+        find.byKey(const ValueKey('shipglows-flutter-zoom-viewport')),
       );
       final content = tester.getSize(
-        find.byKey(const ValueKey('source-sidebar-zoom-content')),
+        find.byKey(const ValueKey('shipglows-flutter-zoom-content')),
       );
       return viewport.width / content.width;
     }
 
     expect(workspaceScale(), 1);
     final initialViewportSize = tester.getSize(
-      find.byKey(const ValueKey('source-sidebar-zoom')),
+      find.byKey(const ValueKey('shipglows-flutter-zoom-viewport')),
     );
     await tester.sendEventToBinding(
       const PointerScrollEvent(
@@ -272,7 +272,9 @@ void main() {
     await tester.pump();
     expect(workspaceScale(), greaterThan(1));
     expect(
-      tester.getSize(find.byKey(const ValueKey('source-sidebar-zoom'))),
+      tester.getSize(
+        find.byKey(const ValueKey('shipglows-flutter-zoom-viewport')),
+      ),
       initialViewportSize,
     );
 
