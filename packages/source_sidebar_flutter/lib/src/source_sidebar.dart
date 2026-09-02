@@ -7,6 +7,7 @@ import 'source_move_destination.dart';
 import 'source_sidebar_item.dart';
 import 'source_sidebar_shortcuts.dart';
 import 'source_sidebar_style.dart';
+import 'source_workspace_actions.dart';
 
 class SourceSidebar extends StatefulWidget {
   const SourceSidebar({
@@ -35,6 +36,13 @@ class SourceSidebar extends StatefulWidget {
     this.categories = const <SourceCategory>[],
     this.shortcuts = const SourceSidebarShortcuts(),
     this.topBarActions = const <Widget>[],
+    this.accounts = const <SourceAccount>[],
+    this.currentAccountId,
+    this.onAccountSelected,
+    this.onSummarize,
+    this.projectDestinations = const <SourceProjectDestination>[],
+    this.onDistribute,
+    this.onActionError,
   });
 
   final String title;
@@ -61,6 +69,13 @@ class SourceSidebar extends StatefulWidget {
   final List<SourceCategory> categories;
   final SourceSidebarShortcuts shortcuts;
   final List<Widget> topBarActions;
+  final List<SourceAccount> accounts;
+  final String? currentAccountId;
+  final SourceAccountCallback? onAccountSelected;
+  final SourceSummaryCallback? onSummarize;
+  final List<SourceProjectDestination> projectDestinations;
+  final SourceDistributionCallback? onDistribute;
+  final SourceActionErrorCallback? onActionError;
 
   @override
   State<SourceSidebar> createState() => _SourceSidebarState();
@@ -71,18 +86,21 @@ class _SourceSidebarState extends State<SourceSidebar> {
   final _searchFocus = FocusNode();
   final _workspaceFocus = FocusNode(debugLabel: 'Source sidebar workspace');
   final _listScrollController = ScrollController();
+  final _readerScrollController = ScrollController();
   final _rowKeys = <String, GlobalKey>{};
   final _rowFocusNodes = <String, FocusNode>{};
   String _query = '';
   String _filterId = _FilterId.inbox;
   String? _pendingAction;
   String? _activeId;
+
   @override
   void dispose() {
     _searchController.dispose();
     _searchFocus.dispose();
     _workspaceFocus.dispose();
     _listScrollController.dispose();
+    _readerScrollController.dispose();
     for (final node in _rowFocusNodes.values) {
       node.dispose();
     }
@@ -246,9 +264,7 @@ class _SourceSidebarState extends State<SourceSidebar> {
       _FilterId.later => 'Later',
       _ =>
         _filterId.startsWith(_FilterId.tagPrefix)
-            ? _categoryFor(
-                _filterId.substring(_FilterId.tagPrefix.length),
-              ).name
+            ? _categoryFor(_filterId.substring(_FilterId.tagPrefix.length)).name
             : 'Sources',
     };
   }
@@ -364,6 +380,11 @@ class _SourceSidebarState extends State<SourceSidebar> {
   }
 
   void _focusActiveRow() {
+    final rowFocus = _rowFocusNodes[_activeId];
+    if (rowFocus?.context != null) {
+      rowFocus!.requestFocus();
+      return;
+    }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       _rowFocusNodes[_activeId]?.requestFocus();
@@ -379,6 +400,160 @@ class _SourceSidebarState extends State<SourceSidebar> {
     setState(() => _pendingAction = name);
     try {
       await callback(item);
+    } catch (error) {
+      widget.onActionError?.call(error);
+    } finally {
+      if (mounted) {
+        setState(() => _pendingAction = null);
+        _restoreWorkspaceFocus();
+      }
+    }
+  }
+
+  void _scrollReader(double amount) {
+    if (_selectedItem == null || !_readerScrollController.hasClients) return;
+    final position = _readerScrollController.position;
+    _readerScrollController.animateTo(
+      (position.pixels + amount).clamp(0.0, position.maxScrollExtent),
+      duration: widget.style.keyboardScrollDuration,
+      curve: Curves.easeOut,
+    );
+  }
+
+  void _scrollReaderBoundary(bool end) {
+    if (_selectedItem == null || !_readerScrollController.hasClients) return;
+    _readerScrollController.animateTo(
+      end ? _readerScrollController.position.maxScrollExtent : 0,
+      duration: widget.style.keyboardScrollDuration,
+      curve: Curves.easeOut,
+    );
+  }
+
+  Future<void> _switchAccount(int delta) async {
+    if (_pendingAction != null ||
+        widget.onAccountSelected == null ||
+        widget.accounts.isEmpty) {
+      return;
+    }
+    final current = widget.accounts.indexWhere(
+      (account) => account.id == widget.currentAccountId,
+    );
+    final next = (current < 0 ? 0 : current + delta).clamp(
+      0,
+      widget.accounts.length - 1,
+    );
+    await _selectAccount(widget.accounts[next]);
+  }
+
+  Future<void> _selectAccount(SourceAccount account) async {
+    if (_pendingAction != null || widget.onAccountSelected == null) return;
+    setState(() => _pendingAction = 'account:${account.id}');
+    try {
+      await widget.onAccountSelected!(account);
+    } catch (error) {
+      widget.onActionError?.call(error);
+    } finally {
+      if (mounted) {
+        setState(() {
+          _pendingAction = null;
+          _activeId = null;
+        });
+        _restoreWorkspaceFocus();
+      }
+    }
+  }
+
+  Future<void> _showAccountChooser() async {
+    if (widget.onAccountSelected == null || widget.accounts.isEmpty) return;
+    final account = await showDialog<SourceAccount>(
+      context: context,
+      builder: (context) => SimpleDialog(
+        title: const Text('Choose account'),
+        children: widget.accounts
+            .map(
+              (account) => SimpleDialogOption(
+                onPressed: () => Navigator.pop(context, account),
+                child: Row(
+                  children: [
+                    Icon(
+                      account.id == widget.currentAccountId
+                          ? Icons.radio_button_checked
+                          : Icons.radio_button_unchecked,
+                    ),
+                    SizedBox(width: widget.style.gapMedium),
+                    Expanded(child: Text(account.label)),
+                  ],
+                ),
+              ),
+            )
+            .toList(growable: false),
+      ),
+    );
+    if (account != null) {
+      await _selectAccount(account);
+    } else {
+      _restoreWorkspaceFocus();
+    }
+  }
+
+  Future<void> _showDistributionChooser(SourceSidebarItem item) async {
+    if (widget.onDistribute == null || widget.projectDestinations.isEmpty) {
+      return;
+    }
+    final selected = <String>{};
+    final result = await showDialog<List<SourceProjectDestination>>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Send to projects'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: widget.projectDestinations
+                  .map(
+                    (project) => CheckboxListTile(
+                      value: selected.contains(project.id),
+                      title: Text(project.label),
+                      onChanged: (checked) => setDialogState(
+                        () => checked == true
+                            ? selected.add(project.id)
+                            : selected.remove(project.id),
+                      ),
+                    ),
+                  )
+                  .toList(growable: false),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: selected.isEmpty
+                  ? null
+                  : () => Navigator.pop(
+                      context,
+                      widget.projectDestinations
+                          .where((project) => selected.contains(project.id))
+                          .toList(growable: false),
+                    ),
+              child: const Text('Send'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (result == null || result.isEmpty) {
+      _restoreWorkspaceFocus();
+      return;
+    }
+    if (_pendingAction != null) return;
+    setState(() => _pendingAction = 'distribute');
+    try {
+      await widget.onDistribute!(item, result);
+    } catch (error) {
+      widget.onActionError?.call(error);
     } finally {
       if (mounted) {
         setState(() => _pendingAction = null);
@@ -542,6 +717,28 @@ class _SourceSidebarState extends State<SourceSidebar> {
     if (canMoveToLater) {
       add(widget.shortcuts.moveToLater, 'Move to Later');
     }
+    if (_selectedItem != null) {
+      add(widget.shortcuts.readerLineDown, 'Read down one line');
+      add(widget.shortcuts.readerLineUp, 'Read up one line');
+      add(widget.shortcuts.readerPageDown, 'Read next page');
+      add(widget.shortcuts.readerPageUp, 'Read previous page');
+      add(widget.shortcuts.readerStart, 'Start of message');
+      add(widget.shortcuts.readerEnd, 'End of message');
+    }
+    if (widget.onAccountSelected != null && widget.accounts.isNotEmpty) {
+      add(widget.shortcuts.nextAccount, 'Next account');
+      add(widget.shortcuts.previousAccount, 'Previous account');
+      add(widget.shortcuts.chooseAccount, 'Choose account');
+    }
+    if (widget.onSummarize != null) {
+      add(widget.shortcuts.summarize, 'Summarize');
+    }
+    if (widget.onDistribute != null && widget.projectDestinations.isNotEmpty) {
+      add(widget.shortcuts.distribute, 'Send to projects');
+    }
+    if (widget.onIngest != null) {
+      add(widget.shortcuts.ingest, 'Send to project');
+    }
     add(widget.shortcuts.resetZoom, 'Reset zoom');
     add(widget.shortcuts.help, 'Show this help');
     return rows;
@@ -603,6 +800,18 @@ class _SourceSidebarState extends State<SourceSidebar> {
     bind(widget.shortcuts.delete, const _DeleteSourceIntent());
     bind(widget.shortcuts.move, const _MoveSourceIntent());
     bind(widget.shortcuts.moveToLater, const _MoveToLaterIntent());
+    bind(widget.shortcuts.readerLineDown, const _ReaderLineDownIntent());
+    bind(widget.shortcuts.readerLineUp, const _ReaderLineUpIntent());
+    bind(widget.shortcuts.readerPageDown, const _ReaderPageDownIntent());
+    bind(widget.shortcuts.readerPageUp, const _ReaderPageUpIntent());
+    bind(widget.shortcuts.readerStart, const _ReaderStartIntent());
+    bind(widget.shortcuts.readerEnd, const _ReaderEndIntent());
+    bind(widget.shortcuts.nextAccount, const _NextAccountIntent());
+    bind(widget.shortcuts.previousAccount, const _PreviousAccountIntent());
+    bind(widget.shortcuts.chooseAccount, const _ChooseAccountIntent());
+    bind(widget.shortcuts.summarize, const _SummarizeIntent());
+    bind(widget.shortcuts.distribute, const _DistributeIntent());
+    bind(widget.shortcuts.ingest, const _IngestIntent());
     bind(widget.shortcuts.help, const _KeyboardHelpIntent());
     return shortcuts;
   }
@@ -683,6 +892,76 @@ class _SourceSidebarState extends State<SourceSidebar> {
             canInvoke: () => !_isEditingText,
             onInvoke: (_) => _showKeyboardHelp(),
           ),
+          _ReaderLineDownIntent: CallbackAction(
+            onInvoke: (_) => _scrollReader(48),
+          ),
+          _ReaderLineUpIntent: CallbackAction(
+            onInvoke: (_) => _scrollReader(-48),
+          ),
+          _ReaderPageDownIntent: CallbackAction(
+            onInvoke: (_) => _scrollReader(
+              _readerScrollController.hasClients
+                  ? _readerScrollController.position.viewportDimension * .85
+                  : 0,
+            ),
+          ),
+          _ReaderPageUpIntent: CallbackAction(
+            onInvoke: (_) => _scrollReader(
+              _readerScrollController.hasClients
+                  ? -_readerScrollController.position.viewportDimension * .85
+                  : 0,
+            ),
+          ),
+          _ReaderStartIntent: CallbackAction(
+            onInvoke: (_) => _scrollReaderBoundary(false),
+          ),
+          _ReaderEndIntent: CallbackAction(
+            onInvoke: (_) => _scrollReaderBoundary(true),
+          ),
+          _NextAccountIntent: CallbackAction(
+            onInvoke: (_) => _switchAccount(1),
+          ),
+          _PreviousAccountIntent: CallbackAction(
+            onInvoke: (_) => _switchAccount(-1),
+          ),
+          _ChooseAccountIntent: _GuardedAction<_ChooseAccountIntent>(
+            canInvoke: () =>
+                !_isEditingText && widget.onAccountSelected != null,
+            onInvoke: (_) => _showAccountChooser(),
+          ),
+          _SummarizeIntent: _GuardedAction<_SummarizeIntent>(
+            canInvoke: () => !_isEditingText && widget.onSummarize != null,
+            onInvoke: (_) {
+              final item = _actionItem;
+              if (item != null && widget.onSummarize != null) {
+                _runAction('summary', item, widget.onSummarize!);
+              }
+              return null;
+            },
+          ),
+          _DistributeIntent: _GuardedAction<_DistributeIntent>(
+            canInvoke: () =>
+                !_isEditingText &&
+                widget.onDistribute != null &&
+                widget.projectDestinations.isNotEmpty,
+            onInvoke: (_) {
+              final item = _actionItem;
+              if (item != null) {
+                _showDistributionChooser(item);
+              }
+              return null;
+            },
+          ),
+          _IngestIntent: _GuardedAction<_IngestIntent>(
+            canInvoke: () => !_isEditingText && widget.onIngest != null,
+            onInvoke: (_) {
+              final item = _actionItem;
+              if (item != null && widget.onIngest != null) {
+                _runAction('ingest', item, widget.onIngest!);
+              }
+              return null;
+            },
+          ),
         },
         child: FlutterZoomViewport(
           initialZoom: widget.style.initialZoom,
@@ -694,129 +973,146 @@ class _SourceSidebarState extends State<SourceSidebar> {
             focusNode: _workspaceFocus,
             autofocus: true,
             child: LayoutBuilder(
-            builder: (context, constraints) {
-              final compact =
-                  constraints.maxWidth < widget.style.compactBreakpoint;
-              final showNavigation =
-                  constraints.maxWidth >= widget.style.navigationBreakpoint;
-              return Material(
-                color: _colors.canvas,
-                child: Column(
-                  children: [
-                    _TopBar(
-                      title: widget.title,
-                      compact: !showNavigation,
-                      style: widget.style,
-                      colors: _colors,
-                      searchController: _searchController,
-                      searchFocus: _searchFocus,
-                      onSearchChanged: (query) =>
-                          setState(() => _query = query),
-                      onMenu: _showNavigationSheet,
-                      onRefresh: widget.onRefresh,
-                      isLoading: widget.isLoading,
-                      actions: widget.topBarActions,
-                    ),
-                    Expanded(
-                      child: Row(
-                        children: [
-                          if (showNavigation)
-                            SizedBox(
-                              width: widget.style.navigationWidth,
-                              child: _NavigationPane(
-                                title: widget.title,
-                                style: widget.style,
-                                colors: _colors,
-                                selectedFilterId: _filterId,
-                                showLater: widget.laterDestinationId != null,
-                                tags: _tags,
-                                categoryFor: _categoryFor,
-                                countFor: _countFor,
-                                onOpenLibrary: widget.onOpenLibrary,
-                                onFilterSelected: _selectFilter,
-                              ),
-                            ),
-                          Expanded(
-                            child: _selectedItem == null
-                                ? _SourceInbox(
-                                    items: _visibleItems,
-                                    selectedId: _activeId,
-                                    filterLabel: _filterLabel,
-                                    isLoading: widget.isLoading,
-                                    isLoadingMore: widget.isLoadingMore,
-                                    hasMore: widget.hasMore,
-                                    errorMessage: widget.errorMessage,
-                                    emptyMessage: widget.emptyMessage,
-                                    compact: compact,
-                                    style: widget.style,
-                                    colors: _colors,
-                                    categoryFor: _categoryFor,
-                                    onSelected: widget.onSelected,
-                                    rowKeys: _rowKeys,
-                                    rowFocusNodes: _rowFocusNodes,
-                                    scrollController: _listScrollController,
-                                    onActiveChanged: (id) =>
-                                        setState(() => _activeId = id),
-                                    onRefresh: widget.onRefresh,
-                                    onLoadMore: widget.onLoadMore,
-                                  )
-                                : _ReaderPane(
-                                    item: _selectedItem!,
-                                    items: _visibleItems,
-                                    style: widget.style,
-                                    colors: _colors,
-                                    categoryFor: _categoryFor,
-                                    pendingAction: _pendingAction,
-                                    onBack: _closeReader,
-                                    onPrevious: () => _moveSelection(-1),
-                                    onNext: () => _moveSelection(1),
-                                    onIngest: widget.onIngest == null
-                                        ? null
-                                        : () => _runAction(
-                                            'ingest',
-                                            _selectedItem!,
-                                            widget.onIngest!,
-                                          ),
-                                    onMarkSeen: widget.onMarkSeen == null
-                                        ? null
-                                        : () => _runAction(
-                                            'seen',
-                                            _selectedItem!,
-                                            widget.onMarkSeen!,
-                                          ),
-                                    onArchive: widget.onArchive == null
-                                        ? null
-                                        : () => _runAction(
-                                            'archive',
-                                            _selectedItem!,
-                                            widget.onArchive!,
-                                          ),
-                                    onOpenExternal:
-                                        widget.onOpenExternal == null
-                                        ? null
-                                        : () => _runAction(
-                                            'open',
-                                            _selectedItem!,
-                                            widget.onOpenExternal!,
-                                          ),
-                                    onDelete: widget.onDelete == null
-                                        ? null
-                                        : () => _confirmDelete(_selectedItem!),
-                                    onMove:
-                                        widget.onMove == null ||
-                                            widget.moveDestinations.isEmpty
-                                        ? null
-                                        : () =>
-                                              _showMoveChooser(_selectedItem!),
-                                  ),
-                          ),
-                        ],
+              builder: (context, constraints) {
+                final compact =
+                    constraints.maxWidth < widget.style.compactBreakpoint;
+                final showNavigation =
+                    constraints.maxWidth >= widget.style.navigationBreakpoint;
+                return Material(
+                  color: _colors.canvas,
+                  child: Column(
+                    children: [
+                      _TopBar(
+                        title: widget.title,
+                        compact: !showNavigation,
+                        style: widget.style,
+                        colors: _colors,
+                        searchController: _searchController,
+                        searchFocus: _searchFocus,
+                        onSearchChanged: (query) =>
+                            setState(() => _query = query),
+                        onMenu: _showNavigationSheet,
+                        onRefresh: widget.onRefresh,
+                        isLoading: widget.isLoading,
+                        actions: widget.topBarActions,
                       ),
-                    ),
-                  ],
-                ),
-              );
-            },
+                      Expanded(
+                        child: Row(
+                          children: [
+                            if (showNavigation)
+                              SizedBox(
+                                width: widget.style.navigationWidth,
+                                child: _NavigationPane(
+                                  title: widget.title,
+                                  style: widget.style,
+                                  colors: _colors,
+                                  selectedFilterId: _filterId,
+                                  showLater: widget.laterDestinationId != null,
+                                  tags: _tags,
+                                  categoryFor: _categoryFor,
+                                  countFor: _countFor,
+                                  onOpenLibrary: widget.onOpenLibrary,
+                                  onFilterSelected: _selectFilter,
+                                ),
+                              ),
+                            Expanded(
+                              child: _selectedItem == null
+                                  ? _SourceInbox(
+                                      items: _visibleItems,
+                                      selectedId: _activeId,
+                                      filterLabel: _filterLabel,
+                                      isLoading: widget.isLoading,
+                                      isLoadingMore: widget.isLoadingMore,
+                                      hasMore: widget.hasMore,
+                                      errorMessage: widget.errorMessage,
+                                      emptyMessage: widget.emptyMessage,
+                                      compact: compact,
+                                      style: widget.style,
+                                      colors: _colors,
+                                      categoryFor: _categoryFor,
+                                      onSelected: widget.onSelected,
+                                      rowKeys: _rowKeys,
+                                      rowFocusNodes: _rowFocusNodes,
+                                      scrollController: _listScrollController,
+                                      onActiveChanged: (id) =>
+                                          setState(() => _activeId = id),
+                                      onRefresh: widget.onRefresh,
+                                      onLoadMore: widget.onLoadMore,
+                                    )
+                                  : _ReaderPane(
+                                      item: _selectedItem!,
+                                      items: _visibleItems,
+                                      style: widget.style,
+                                      colors: _colors,
+                                      categoryFor: _categoryFor,
+                                      pendingAction: _pendingAction,
+                                      scrollController: _readerScrollController,
+                                      onBack: _closeReader,
+                                      onPrevious: () => _moveSelection(-1),
+                                      onNext: () => _moveSelection(1),
+                                      onIngest: widget.onIngest == null
+                                          ? null
+                                          : () => _runAction(
+                                              'ingest',
+                                              _selectedItem!,
+                                              widget.onIngest!,
+                                            ),
+                                      onMarkSeen: widget.onMarkSeen == null
+                                          ? null
+                                          : () => _runAction(
+                                              'seen',
+                                              _selectedItem!,
+                                              widget.onMarkSeen!,
+                                            ),
+                                      onArchive: widget.onArchive == null
+                                          ? null
+                                          : () => _runAction(
+                                              'archive',
+                                              _selectedItem!,
+                                              widget.onArchive!,
+                                            ),
+                                      onOpenExternal:
+                                          widget.onOpenExternal == null
+                                          ? null
+                                          : () => _runAction(
+                                              'open',
+                                              _selectedItem!,
+                                              widget.onOpenExternal!,
+                                            ),
+                                      onDelete: widget.onDelete == null
+                                          ? null
+                                          : () =>
+                                                _confirmDelete(_selectedItem!),
+                                      onMove:
+                                          widget.onMove == null ||
+                                              widget.moveDestinations.isEmpty
+                                          ? null
+                                          : () => _showMoveChooser(
+                                              _selectedItem!,
+                                            ),
+                                      onSummarize: widget.onSummarize == null
+                                          ? null
+                                          : () => _runAction(
+                                              'summary',
+                                              _selectedItem!,
+                                              widget.onSummarize!,
+                                            ),
+                                      onDistribute:
+                                          widget.onDistribute == null ||
+                                              widget.projectDestinations.isEmpty
+                                          ? null
+                                          : () => _showDistributionChooser(
+                                              _selectedItem!,
+                                            ),
+                                    ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
             ),
           ),
         ),
@@ -1532,25 +1828,23 @@ class _CategoryIndicators extends StatelessWidget {
       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
       children: categoryIds
           .take(3)
-          .map(
-            (id) {
-              final category = categoryFor(id);
-              return Tooltip(
-                message: category.name,
-                child: Semantics(
-                  label: 'Category ${category.name}',
-                  child: Padding(
-                    padding: EdgeInsets.only(left: style.tagDotGap),
-                    child: Icon(
-                      category.icon,
-                      size: style.categoryIndicatorSize,
-                      color: category.color,
-                    ),
+          .map((id) {
+            final category = categoryFor(id);
+            return Tooltip(
+              message: category.name,
+              child: Semantics(
+                label: 'Category ${category.name}',
+                child: Padding(
+                  padding: EdgeInsets.only(left: style.tagDotGap),
+                  child: Icon(
+                    category.icon,
+                    size: style.categoryIndicatorSize,
+                    color: category.color,
                   ),
                 ),
-              );
-            },
-          )
+              ),
+            );
+          })
           .toList(growable: false),
     );
   }
@@ -1564,6 +1858,7 @@ class _ReaderPane extends StatelessWidget {
     required this.colors,
     required this.categoryFor,
     required this.pendingAction,
+    required this.scrollController,
     required this.onBack,
     required this.onPrevious,
     required this.onNext,
@@ -1573,6 +1868,8 @@ class _ReaderPane extends StatelessWidget {
     this.onDelete,
     this.onOpenExternal,
     this.onMove,
+    this.onSummarize,
+    this.onDistribute,
   });
 
   final SourceSidebarItem item;
@@ -1581,6 +1878,7 @@ class _ReaderPane extends StatelessWidget {
   final SourceSidebarColors colors;
   final SourceCategory Function(String) categoryFor;
   final String? pendingAction;
+  final ScrollController scrollController;
   final VoidCallback onBack;
   final VoidCallback onPrevious;
   final VoidCallback onNext;
@@ -1590,6 +1888,8 @@ class _ReaderPane extends StatelessWidget {
   final VoidCallback? onDelete;
   final VoidCallback? onOpenExternal;
   final VoidCallback? onMove;
+  final VoidCallback? onSummarize;
+  final VoidCallback? onDistribute;
 
   @override
   Widget build(BuildContext context) {
@@ -1633,6 +1933,18 @@ class _ReaderPane extends StatelessWidget {
                         tooltip: 'Move source',
                         icon: Icons.drive_file_move_outline,
                         onPressed: busy ? null : onMove,
+                      ),
+                    if (onSummarize != null)
+                      _ActionIcon(
+                        tooltip: 'Summarize source',
+                        icon: Icons.summarize_outlined,
+                        onPressed: busy ? null : onSummarize,
+                      ),
+                    if (onDistribute != null)
+                      _ActionIcon(
+                        tooltip: 'Send to projects',
+                        icon: Icons.call_split_outlined,
+                        onPressed: busy ? null : onDistribute,
                       ),
                     if (!narrow)
                       _ActionIcon(
@@ -1695,6 +2007,7 @@ class _ReaderPane extends StatelessWidget {
           ),
           Expanded(
             child: SingleChildScrollView(
+              controller: scrollController,
               padding: style.contentPadding,
               child: Center(
                 child: SelectionArea(
@@ -2013,4 +2326,52 @@ class _MoveToLaterIntent extends Intent {
 
 class _KeyboardHelpIntent extends Intent {
   const _KeyboardHelpIntent();
+}
+
+class _ReaderLineDownIntent extends Intent {
+  const _ReaderLineDownIntent();
+}
+
+class _ReaderLineUpIntent extends Intent {
+  const _ReaderLineUpIntent();
+}
+
+class _ReaderPageDownIntent extends Intent {
+  const _ReaderPageDownIntent();
+}
+
+class _ReaderPageUpIntent extends Intent {
+  const _ReaderPageUpIntent();
+}
+
+class _ReaderStartIntent extends Intent {
+  const _ReaderStartIntent();
+}
+
+class _ReaderEndIntent extends Intent {
+  const _ReaderEndIntent();
+}
+
+class _NextAccountIntent extends Intent {
+  const _NextAccountIntent();
+}
+
+class _PreviousAccountIntent extends Intent {
+  const _PreviousAccountIntent();
+}
+
+class _ChooseAccountIntent extends Intent {
+  const _ChooseAccountIntent();
+}
+
+class _SummarizeIntent extends Intent {
+  const _SummarizeIntent();
+}
+
+class _DistributeIntent extends Intent {
+  const _DistributeIntent();
+}
+
+class _IngestIntent extends Intent {
+  const _IngestIntent();
 }

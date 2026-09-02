@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Added complete keyboard reading controls, optional account switching and chooser,
+  host-owned summaries, and unique multi-project distribution.
+- Made keyboard help capability-aware and restored a valid workspace focus after
+  cancelled, successful, or failed asynchronous host actions.
+
 ## 0.4.0
 
 - Renamed the visible label concept to Categories and added host-defined names,

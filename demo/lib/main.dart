@@ -55,12 +55,22 @@ class _SourceLibraryDemoState extends State<SourceLibraryDemo> {
     SourceMoveDestination(id: 'reference', label: 'Reference'),
     SourceMoveDestination(id: 'archive', label: 'Archived'),
   ];
+  static const _accounts = [
+    SourceAccount(id: 'work', label: 'Work account'),
+    SourceAccount(id: 'research', label: 'Research account'),
+  ];
+  static const _projects = [
+    SourceProjectDestination(id: 'shipglows', label: 'ShipGlows'),
+    SourceProjectDestination(id: 'contentglows', label: 'ContentGlows'),
+    SourceProjectDestination(id: 'newsletter', label: 'Health newsletter'),
+  ];
 
   late List<SourceSidebarItem> _items;
   late NewsletterDraft _newsletterDraft;
   late List<NewsletterSourceReference> _newsletterSources;
   late NewsletterSchedule? _newsletterSchedule;
   String? _selectedId;
+  String _accountId = 'work';
   bool _loading = false;
   _DemoWorkspace _workspace = _DemoWorkspace.sources;
   NewsletterAudienceSummary? _audience;
@@ -109,6 +119,37 @@ class _SourceLibraryDemoState extends State<SourceLibraryDemo> {
       tags: {...item.tags, 'demo-processed'}.toList(),
     );
     _notify('Sent to the selected project (simulated).');
+  }
+
+  Future<void> _selectAccount(SourceAccount account) async {
+    setState(() {
+      _accountId = account.id;
+      _selectedId = null;
+    });
+    _notify('Switched to ${account.label} (simulated).');
+  }
+
+  Future<void> _summarize(SourceSidebarItem item) async {
+    await Future<void>.delayed(PreviewTheme.simulatedActionDelay);
+    if (!mounted) return;
+    _replace(item, tags: {...item.tags, 'synthetic-summary'}.toList());
+    _notify('Synthetic summary ready: ${item.summary}');
+  }
+
+  Future<void> _distribute(
+    SourceSidebarItem item,
+    List<SourceProjectDestination> projects,
+  ) async {
+    await Future<void>.delayed(PreviewTheme.simulatedActionDelay);
+    if (!mounted) return;
+    _replace(
+      item,
+      processingState: SourceProcessingState.processed,
+      tags: {...item.tags, ...projects.map((project) => project.id)}.toList(),
+    );
+    _notify(
+      'Sent to ${projects.map((project) => project.label).join(', ')} (simulated).',
+    );
   }
 
   Future<void> _markSeen(SourceSidebarItem item) async {
@@ -209,7 +250,8 @@ class _SourceLibraryDemoState extends State<SourceLibraryDemo> {
         id: 'dark-mode-review',
         severity: NewsletterIssueSeverity.warning,
         title: 'Dark-mode inbox proof deferred',
-        message: 'The synthetic preview cannot prove received-client rendering.',
+        message:
+            'The synthetic preview cannot prove received-client rendering.',
         target: 'design',
       ),
     ];
@@ -289,11 +331,7 @@ class _SourceLibraryDemoState extends State<SourceLibraryDemo> {
 
   Future<Map<String, num>> _loadNewsletterAnalytics(String draftId) async {
     await Future<void>.delayed(PreviewTheme.simulatedActionDelay);
-    return const {
-      'Delivered': 0,
-      'Unique opens': 0,
-      'Unique clicks': 0,
-    };
+    return const {'Delivered': 0, 'Unique opens': 0, 'Unique clicks': 0};
   }
 
   Future<NewsletterOperationReceipt> _sendNewsletter(
@@ -314,109 +352,112 @@ class _SourceLibraryDemoState extends State<SourceLibraryDemo> {
       body: SafeArea(
         child: switch (_workspace) {
           _DemoWorkspace.sources => SourceSidebar(
-              title: 'Sources',
-              items: _items,
-              selectedId: _selectedId,
-              isLoading: _loading,
-              style: PreviewTheme.sidebarStyle(widget.darkMode),
-              categories: PreviewTheme.categories(widget.darkMode),
-              topBarActions: [
-                IconButton(
-                  tooltip: 'Open Newsletter Studio',
-                  onPressed: () {
-                    setState(() => _workspace = _DemoWorkspace.newsletter);
-                  },
-                  icon: const Icon(Icons.edit_note_outlined),
+            title: 'Sources',
+            items: _items,
+            selectedId: _selectedId,
+            isLoading: _loading,
+            style: PreviewTheme.sidebarStyle(widget.darkMode),
+            categories: PreviewTheme.categories(widget.darkMode),
+            topBarActions: [
+              IconButton(
+                tooltip: 'Open Newsletter Studio',
+                onPressed: () {
+                  setState(() => _workspace = _DemoWorkspace.newsletter);
+                },
+                icon: const Icon(Icons.edit_note_outlined),
+              ),
+              IconButton(
+                tooltip: widget.darkMode ? 'Use light theme' : 'Use dark theme',
+                onPressed: () => widget.onThemeChanged(!widget.darkMode),
+                icon: Icon(
+                  widget.darkMode
+                      ? Icons.light_mode_outlined
+                      : Icons.dark_mode_outlined,
                 ),
-                IconButton(
-                  tooltip: widget.darkMode
-                      ? 'Use light theme'
-                      : 'Use dark theme',
-                  onPressed: () => widget.onThemeChanged(!widget.darkMode),
-                  icon: Icon(
-                    widget.darkMode
-                        ? Icons.light_mode_outlined
-                        : Icons.dark_mode_outlined,
-                  ),
-                ),
-                const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 8),
-                  child: CircleAvatar(radius: 16, child: Text('D')),
-                ),
-              ],
-              onSelected: (id) => setState(() => _selectedId = id),
-              onRefresh: _refresh,
-              onOpenLibrary: _openLibrary,
-              onIngest: _ingest,
-              onMarkSeen: _markSeen,
-              onArchive: _archive,
-              onDelete: _delete,
-              onOpenExternal: _openExternal,
-              moveDestinations: _moveDestinations,
-              laterDestinationId: 'later',
-              onMove: _move,
-            ),
+              ),
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 8),
+                child: CircleAvatar(radius: 16, child: Text('D')),
+              ),
+            ],
+            onSelected: (id) => setState(() => _selectedId = id),
+            onRefresh: _refresh,
+            onOpenLibrary: _openLibrary,
+            onIngest: _ingest,
+            onMarkSeen: _markSeen,
+            onArchive: _archive,
+            onDelete: _delete,
+            onOpenExternal: _openExternal,
+            moveDestinations: _moveDestinations,
+            laterDestinationId: 'later',
+            onMove: _move,
+            accounts: _accounts,
+            currentAccountId: _accountId,
+            onAccountSelected: _selectAccount,
+            onSummarize: _summarize,
+            projectDestinations: _projects,
+            onDistribute: _distribute,
+            onActionError: (error) => _notify('Action failed: $error'),
+          ),
           _DemoWorkspace.newsletter => NewsletterStudio(
-              draft: _newsletterDraft,
-              availableSources: _newsletterSources,
-              audience: _audience,
-              sender: const NewsletterSenderSummary(
-                name: 'ContentGlows Health',
-                address: 'newsletter@example.test',
-                replyTo: 'hello@example.test',
-                isVerified: true,
-              ),
-              design: const NewsletterDesignSummary(
-                templateName: 'Editorial focus',
-                brandName: 'Synthetic ContentGlows',
-              ),
-              schedule: _newsletterSchedule,
-              testReceipt: _testReceipt,
-              capabilities: const NewsletterStudioCapabilities(
-                canTest: true,
-                canSchedule: true,
-                canSend: true,
-                canUnschedule: true,
-                canViewDeliveryStatus: true,
-                canViewAnalytics: true,
-              ),
-              style: PreviewTheme.newsletterStyle(widget.darkMode),
-              onDraftChanged: (draft) {
-                setState(() => _newsletterDraft = draft);
-              },
-              onSaveDraft: _saveNewsletter,
-              onResolveAudience: _resolveNewsletterAudience,
-              onValidateDraft: _validateNewsletter,
-              onRenderPreview: _renderNewsletterPreview,
-              onSendTest: _sendNewsletterTest,
-              onSchedule: _scheduleNewsletter,
-              onSend: _sendNewsletter,
-              onUnschedule: _unscheduleNewsletter,
-              onLoadDeliveryStatus: _loadNewsletterDeliveryStatus,
-              onLoadAnalytics: _loadNewsletterAnalytics,
-              onOpenSource: (sourceId) async {
-                final source = _newsletterSources.firstWhere(
-                  (candidate) => candidate.id == sourceId,
-                );
-                _notify('Opened ${source.title} in the synthetic source tray.');
-              },
-              onBack: () {
-                setState(() => _workspace = _DemoWorkspace.sources);
-              },
-              topBarActions: [
-                IconButton(
-                  tooltip: widget.darkMode
-                      ? 'Use light theme'
-                      : 'Use dark theme',
-                  onPressed: () => widget.onThemeChanged(!widget.darkMode),
-                  icon: Icon(
-                    widget.darkMode
-                        ? Icons.light_mode_outlined
-                        : Icons.dark_mode_outlined,
-                  ),
-                ),
-              ],
+            draft: _newsletterDraft,
+            availableSources: _newsletterSources,
+            audience: _audience,
+            sender: const NewsletterSenderSummary(
+              name: 'ContentGlows Health',
+              address: 'newsletter@example.test',
+              replyTo: 'hello@example.test',
+              isVerified: true,
             ),
+            design: const NewsletterDesignSummary(
+              templateName: 'Editorial focus',
+              brandName: 'Synthetic ContentGlows',
+            ),
+            schedule: _newsletterSchedule,
+            testReceipt: _testReceipt,
+            capabilities: const NewsletterStudioCapabilities(
+              canTest: true,
+              canSchedule: true,
+              canSend: true,
+              canUnschedule: true,
+              canViewDeliveryStatus: true,
+              canViewAnalytics: true,
+            ),
+            style: PreviewTheme.newsletterStyle(widget.darkMode),
+            onDraftChanged: (draft) {
+              setState(() => _newsletterDraft = draft);
+            },
+            onSaveDraft: _saveNewsletter,
+            onResolveAudience: _resolveNewsletterAudience,
+            onValidateDraft: _validateNewsletter,
+            onRenderPreview: _renderNewsletterPreview,
+            onSendTest: _sendNewsletterTest,
+            onSchedule: _scheduleNewsletter,
+            onSend: _sendNewsletter,
+            onUnschedule: _unscheduleNewsletter,
+            onLoadDeliveryStatus: _loadNewsletterDeliveryStatus,
+            onLoadAnalytics: _loadNewsletterAnalytics,
+            onOpenSource: (sourceId) async {
+              final source = _newsletterSources.firstWhere(
+                (candidate) => candidate.id == sourceId,
+              );
+              _notify('Opened ${source.title} in the synthetic source tray.');
+            },
+            onBack: () {
+              setState(() => _workspace = _DemoWorkspace.sources);
+            },
+            topBarActions: [
+              IconButton(
+                tooltip: widget.darkMode ? 'Use light theme' : 'Use dark theme',
+                onPressed: () => widget.onThemeChanged(!widget.darkMode),
+                icon: Icon(
+                  widget.darkMode
+                      ? Icons.light_mode_outlined
+                      : Icons.dark_mode_outlined,
+                ),
+              ),
+            ],
+          ),
         },
       ),
     );

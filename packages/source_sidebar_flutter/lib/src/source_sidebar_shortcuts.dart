@@ -34,6 +34,36 @@ class SourceSidebarShortcuts {
     this.delete = const [SingleActivator(LogicalKeyboardKey.keyW)],
     this.move = const [SingleActivator(LogicalKeyboardKey.keyV)],
     this.moveToLater = const [SingleActivator(LogicalKeyboardKey.keyL)],
+    this.readerLineDown = const [
+      SingleActivator(LogicalKeyboardKey.arrowDown, alt: true),
+    ],
+    this.readerLineUp = const [
+      SingleActivator(LogicalKeyboardKey.arrowUp, alt: true),
+    ],
+    this.readerPageDown = const [SingleActivator(LogicalKeyboardKey.pageDown)],
+    this.readerPageUp = const [SingleActivator(LogicalKeyboardKey.pageUp)],
+    this.readerStart = const [SingleActivator(LogicalKeyboardKey.home)],
+    this.readerEnd = const [SingleActivator(LogicalKeyboardKey.end)],
+    this.nextAccount = const [SingleActivator(LogicalKeyboardKey.bracketRight)],
+    this.previousAccount = const [
+      SingleActivator(LogicalKeyboardKey.bracketLeft),
+    ],
+    this.chooseAccount = const [
+      SingleActivator(LogicalKeyboardKey.keyA, control: true, shift: true),
+      SingleActivator(LogicalKeyboardKey.keyA, meta: true, shift: true),
+    ],
+    this.summarize = const [
+      SingleActivator(LogicalKeyboardKey.keyS, control: true, shift: true),
+      SingleActivator(LogicalKeyboardKey.keyS, meta: true, shift: true),
+    ],
+    this.distribute = const [
+      SingleActivator(LogicalKeyboardKey.keyD, control: true, shift: true),
+      SingleActivator(LogicalKeyboardKey.keyD, meta: true, shift: true),
+    ],
+    this.ingest = const [
+      SingleActivator(LogicalKeyboardKey.keyI, control: true, shift: true),
+      SingleActivator(LogicalKeyboardKey.keyI, meta: true, shift: true),
+    ],
     this.resetZoom = const [
       SingleActivator(LogicalKeyboardKey.digit0, control: true),
       SingleActivator(LogicalKeyboardKey.digit0, meta: true),
@@ -50,6 +80,18 @@ class SourceSidebarShortcuts {
   final List<ShortcutActivator> delete;
   final List<ShortcutActivator> move;
   final List<ShortcutActivator> moveToLater;
+  final List<ShortcutActivator> readerLineDown;
+  final List<ShortcutActivator> readerLineUp;
+  final List<ShortcutActivator> readerPageDown;
+  final List<ShortcutActivator> readerPageUp;
+  final List<ShortcutActivator> readerStart;
+  final List<ShortcutActivator> readerEnd;
+  final List<ShortcutActivator> nextAccount;
+  final List<ShortcutActivator> previousAccount;
+  final List<ShortcutActivator> chooseAccount;
+  final List<ShortcutActivator> summarize;
+  final List<ShortcutActivator> distribute;
+  final List<ShortcutActivator> ingest;
   final List<ShortcutActivator> resetZoom;
   final List<ShortcutActivator> help;
 }

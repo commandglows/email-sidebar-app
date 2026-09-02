@@ -25,6 +25,12 @@ SourceSidebar(
   ],
   laterDestinationId: 'later',
   onMove: moveSource,
+  accounts: accounts,
+  currentAccountId: currentAccountId,
+  onAccountSelected: switchAccount,
+  onSummarize: summarizeSource,
+  projectDestinations: projects,
+  onDistribute: distributeSource,
   categories: const [
     SourceCategory(
       id: 'security',
@@ -64,7 +70,12 @@ The default Glows bindings are `J/K` and the arrow keys to navigate, `O` or
 Enter to open, `/` or Ctrl/Command+F to search, `U` or Escape to return,
 `E` to archive, `W` to delete with confirmation, `V` to choose a move
 destination, `L` to move directly to the configured Later destination, and
-`?` to show keyboard help. Tab, Shift+Tab, Enter, and Space continue to use
+Ctrl/Command+Shift+`I` to send to the legacy single-project action,
+Ctrl/Command+Shift+`S` to summarize, Ctrl/Command+Shift+`D` to select and send
+to one or more projects, `[`/`]` to switch accounts, and Ctrl/Command+Shift+`A`
+to choose an account. In the reader, Alt+Up/Down scrolls by line, PageUp/PageDown
+by page, and Home/End goes to the content boundary. `?` shows only commands
+whose host capability is available. Tab, Shift+Tab, Enter, and Space continue to use
 Flutter's native focus traversal and button activation.
 
 Alphabetic commands are ignored whenever any editable text control owns focus.
@@ -90,7 +101,10 @@ shortcuts: const SourceSidebarShortcuts(
 ```
 
 If two customized bindings collide, the later command in the documented
-constructor order wins. Move destinations are host-owned identifiers and
+constructor order wins. Accounts and project destinations use opaque host-owned
+identifiers. Project selection is de-duplicated and cannot be submitted empty.
+Summary, account switching, and distribution remain optional callbacks; failures
+are reported through `onActionError` and keyboard focus is restored. Move destinations are host-owned identifiers and
 labels; the package does not translate them into provider API concepts.
 
 ## Interface zoom
