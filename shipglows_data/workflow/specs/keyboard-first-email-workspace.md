@@ -1,11 +1,13 @@
 ---
 artifact: implementation_spec
 metadata_schema_version: "1.0"
-artifact_version: "1.1.1"
+artifact_version: "1.2.0"
 project: email-sidebar-app
 created_at: "2026-09-02T21:39:00Z"
 updated_at: "2026-09-03T00:00:00Z"
-status: verified
+created: "2026-09-02"
+updated: "2026-09-03"
+status: reviewed
 source_skill: 100-sg-spec
 source_model: gpt-5
 scope: keyboard-first-email-workspace
@@ -19,8 +21,12 @@ linked_systems:
   - demo
 depends_on: []
 supersedes: []
+evidence:
+  - Source sidebar Flutter analysis and 19 widget tests passed on 2026-09-03.
+  - Demo Flutter analysis and 7 widget tests passed on 2026-09-03.
+  - Canonical technical documentation mapping validated on 2026-09-03.
 next_review: "2026-10-02"
-next_step: establish the canonical code-to-documentation map before closure
+next_step: monitor host integration feedback
 ---
 
 # Title
@@ -29,7 +35,7 @@ Keyboard-first email workspace
 
 ## Status
 
-Implemented and verified in the provider-neutral package and synthetic demo; closure awaits the repository's canonical code-to-documentation map.
+Complete and verified in the provider-neutral package and synthetic demo, with canonical code-to-documentation routing established.
 
 ## User Story
 
@@ -187,6 +193,8 @@ None. Default bindings may remain host-customizable; the package contract, not a
 | 2026-09-03 | 102-sg-start | gpt-5 | Implemented keyboard reading, accounts, summaries, and multi-project distribution | implemented | verification |
 | 2026-09-03 | 103-sg-verify | gpt-5 | Ran analyzers, package/demo widget suites, and design-system drift scan | passed | closure |
 | 2026-09-03 | 104-sg-end | gpt-5 | Reconciled documentation, scope, and owned delivery paths | partial: canonical code-docs map absent | documentation governance |
+| 2026-09-03 | sg-docs | gpt-5 | Created the canonical technical entrypoint and code-to-documentation map | reviewed | closure recheck |
+| 2026-09-03 | 104-sg-end | gpt-5 | Rechecked mapped documentation, proof, and delivery state | complete | monitor host integration feedback |
 
 ## Current Chantier Flow
 
@@ -194,5 +202,5 @@ None. Default bindings may remain host-customizable; the package contract, not a
 - Readiness: ready
 - Implementation: complete
 - Verification: passed
-- Closure: pending canonical code-docs mapping
+- Closure: complete
 - Ship: implementation pushed to main
